@@ -1,0 +1,166 @@
+# HogTrace Test Examples
+# These examples test various features of the HogTrace grammar
+
+# Example 1: Basic function entry trace
+fn:myapp.users.create_user:entry
+{
+    capture(args);
+}
+
+# Example 2: Function exit trace with predicate
+fn:myapp.users.create_user:exit
+/ exception == None /
+{
+    capture(retval);
+}
+
+# Example 3: Predicate with argument guard
+fn:myapp.auth.check_permission:entry
+/ arg0 == "admin" /
+{
+    capture(args);
+}
+
+# Example 4: Complex predicate with field access
+fn:myapp.db.query:exit
+/ exception == None && retval["status"] == "success" /
+{
+    capture(retval);
+}
+
+# Example 5: Request-scoped variables
+fn:myapp.api.handler:entry
+{
+    $req.user_id = arg0.id;
+    $req.start_time = timestamp();
+    capture(user_id=$req.user_id);
+}
+
+# Example 6: Sampling with percentage
+fn:myapp.api.high_traffic:entry
+{
+    sample 10%;
+    capture(args);
+}
+
+# Example 7: Sampling with ratio
+fn:myapp.api.list_products:entry
+{
+    sample 1/100;
+    capture(args, kwargs);
+}
+
+# Example 8: Predicate-based sampling
+fn:myapp.api.endpoint:entry
+/ rand() < 0.1 /
+{
+    capture(args);
+}
+
+# Example 9: Wildcard probing
+fn:myapp.api.*:entry
+{
+    sample 5%;
+    capture(args, $req.user_id);
+}
+
+# Example 10: Line offset probe
+fn:myapp.complex.algorithm.process:entry+10
+{
+    capture(locals);
+}
+
+# Example 11: Exit offset probe
+fn:myapp.function:exit+5
+{
+    capture(retval, locals);
+}
+
+# Example 12: Complex nested field access
+fn:myapp.process:entry
+/ len(args) > 2 && arg0.data[0]["value"] >= 100 /
+{
+    capture(
+        count=len(args),
+        first_value=arg0.data[0]["value"],
+        user_email=arg1.user.email
+    );
+}
+
+# Example 13: Multiple request vars (both $req and $request)
+fn:myapp.middleware.auth:entry
+{
+    $req.user_id = arg0.user.id;
+    $request.session_id = arg0.session["id"];
+    capture(user=$req.user_id, session=$request.session_id);
+}
+
+# Example 14: Exception tracking
+fn:myapp.payments.process_payment:exit
+/ exception != None /
+{
+    capture(
+        args=args,
+        exception=exception,
+        user_id=$req.user_id
+    );
+}
+
+# Example 15: Using send() instead of capture()
+fn:myapp.analytics.track:entry
+{
+    send(args, retval);
+}
+
+# Example 16: Multi-probe request tracking
+fn:django.core.handlers.wsgi.WSGIHandler:entry
+{
+    $req.request_id = arg0.META["REQUEST_ID"];
+    $req.start_time = timestamp();
+}
+
+fn:myapp.db.execute_query:entry
+/ $req.request_id != None /
+{
+    capture(query=$req.request_id, sql=arg0);
+}
+
+fn:django.core.handlers.wsgi.WSGIHandler:exit
+{
+    $request.duration = timestamp() - $request.start_time;
+    send(
+        request_id=$request.request_id,
+        duration=$request.duration,
+        status=retval.status_code
+    );
+}
+
+# Example 17: Complex logical expressions
+fn:myapp.handler:entry
+/ (arg0.role == "admin" || arg0.role == "superuser") && arg1 > 0 /
+{
+    capture(args);
+}
+
+# Example 18: Arithmetic expressions
+fn:myapp.compute:exit
+/ retval * 2 > 100 && retval % 10 == 0 /
+{
+    capture(result=retval);
+}
+
+# Example 19: Negation operator
+fn:myapp.validator:entry
+/ !arg0.is_valid /
+{
+    capture(invalid_data=arg0);
+}
+
+# Example 20: All capture types
+fn:myapp.debug:entry
+{
+    capture(args);
+    capture(locals);
+    capture(globals);
+    capture(arg0, arg1, arg2);
+}
