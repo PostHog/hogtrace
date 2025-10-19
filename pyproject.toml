@@ -26,3 +26,8 @@ dev = [
 
 [project.scripts]
 hogtrace = "main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+]

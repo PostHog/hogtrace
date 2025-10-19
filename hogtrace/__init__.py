@@ -34,7 +34,23 @@ from hogtrace.ast import Program
 
 __version__ = "0.1.0"
 
-__all__ = ["parse", "parse_file", "Program"]
+__all__ = [
+    # Parsing
+    "parse",
+    "parse_file",
+    "Program",
+    # VM
+    "ProbeExecutor",
+    "ProgramExecutor",
+    "RequestLocalStore",
+    "RequestContext",
+    # Errors
+    "ParseError",
+]
+
+# Import VM components for convenience
+from hogtrace.vm import ProbeExecutor, ProgramExecutor
+from hogtrace.request_store import RequestLocalStore, RequestContext
 
 
 class ParseError(Exception):

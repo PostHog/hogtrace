@@ -93,15 +93,23 @@ uv run python examples/example_usage.py
 
 ## Testing
 
-```bash
-# API tests
-uv run python tests/test_api.py
+Run all tests with pytest:
 
-# Parser tests
-uv run python tests/test_parser.py
+```bash
+# Run all tests
+uv run pytest
+
+# Run with verbose output
+uv run pytest -v
+
+# Run specific test file
+uv run pytest tests/test_vm.py
+
+# Run specific test
+uv run pytest tests/test_vm.py::test_basic_capture
 ```
 
-All tests pass ✅
+**34 tests** - All passing ✅
 
 ## Features
 
