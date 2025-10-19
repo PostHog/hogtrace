@@ -29,5 +29,7 @@ hogtrace = "main:main"
 
 [dependency-groups]
 dev = [
+    "cython>=3.1.4",
     "pytest>=8.4.2",
+    "python-afl>=0.7.3",
 ]

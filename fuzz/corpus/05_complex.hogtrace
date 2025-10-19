@@ -1,0 +1,9 @@
+fn:myapp.process:entry
+/ len(args) > 2 && arg0.data[0]["value"] >= 100 /
+{
+    capture(
+        count=len(args),
+        first_value=arg0.data[0]["value"],
+        email=arg1.user.email
+    );
+}

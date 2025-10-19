@@ -1,0 +1,9 @@
+fn:myapp.start:entry
+{
+    $req.start_time = timestamp();
+}
+
+fn:myapp.end:exit
+{
+    capture(duration=timestamp() - $req.start_time);
+}

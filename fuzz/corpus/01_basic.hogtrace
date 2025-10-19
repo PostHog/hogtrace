@@ -1,0 +1,4 @@
+fn:myapp.test:entry
+{
+    capture(args);
+}
