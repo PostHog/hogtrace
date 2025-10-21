@@ -20,6 +20,13 @@ program = hogtrace.parse(code)
 
 for probe in program.probes:
     print(f"Probe: {probe.spec}")
+
+# Serialize to JSON for storage
+json_str = hogtrace.program_to_json(program)
+# Store in database: db.save_probe_definition(session_id, json_str)
+
+# Later, deserialize and execute
+program = hogtrace.program_from_json(json_str)
 ```
 
 See **[docs/QUICKSTART.md](docs/QUICKSTART.md)** for complete guide.
@@ -85,10 +92,16 @@ Run the demos:
 
 ```bash
 # API demo (6 examples)
-uv run python examples/demo_api.py
+PYTHONPATH=. uv run python examples/demo_api.py
+
+# VM execution demo
+PYTHONPATH=. uv run python examples/demo_vm.py
+
+# JSON serialization demo
+PYTHONPATH=. uv run python examples/demo_serialization.py
 
 # Low-level ANTLR usage
-uv run python examples/example_usage.py
+PYTHONPATH=. uv run python examples/example_usage.py
 ```
 
 ## Testing
@@ -108,20 +121,6 @@ uv run pytest tests/test_vm.py
 # Run specific test
 uv run pytest tests/test_vm.py::test_basic_capture
 ```
-
-**34 tests** - All passing ✅
-
-## Features
-
-- ✅ Clean Python API (`hogtrace.parse()`)
-- ✅ Full type hints for IDE support
-- ✅ DTrace-inspired syntax
-- ✅ Request-scoped variables (`$req.*`)
-- ✅ Sampling support
-- ✅ Predicates/guards
-- ✅ CLI tool
-- ✅ Comprehensive documentation
-- ✅ Test suite (100% passing)
 
 ## Language Example
 
@@ -150,25 +149,6 @@ fn:django.core.handlers.wsgi.WSGIHandler:exit
     );
 }
 ```
-
-## Development Status
-
-**Phase 1: Language Design & Parsing** ✅ COMPLETE
-
-- [x] Language specification
-- [x] ANTLR4 grammar
-- [x] Parser implementation
-- [x] Clean API
-- [x] Comprehensive test suite
-- [x] Documentation
-
-**Phase 2: Runtime Implementation** 🚧 TODO
-
-- [ ] AST builder
-- [ ] Bytecode injection
-- [ ] Probe management
-- [ ] Request context tracking
-- [ ] PostHog integration
 
 ## License
 

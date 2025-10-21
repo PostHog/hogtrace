@@ -44,13 +44,37 @@ __all__ = [
     "ProgramExecutor",
     "RequestLocalStore",
     "RequestContext",
+    # Limits
+    "HogTraceLimits",
+    "DEFAULT_LIMITS",
+    "STRICT_LIMITS",
+    "RELAXED_LIMITS",
+    # Logging
+    "logger",
+    "set_log_level",
     # Errors
     "ParseError",
+    "EvaluationError",
+    "TimeoutError",
+    "CaptureSizeError",
+    # Serialization
+    "program_to_json",
+    "program_from_json",
+    "serialize_program",
+    "deserialize_program",
 ]
 
 # Import VM components for convenience
 from hogtrace.vm import ProbeExecutor, ProgramExecutor
 from hogtrace.request_store import RequestLocalStore, RequestContext
+from hogtrace.limits import HogTraceLimits, DEFAULT_LIMITS, STRICT_LIMITS, RELAXED_LIMITS
+from hogtrace import logger
+from hogtrace.logger import set_log_level
+from hogtrace.errors import EvaluationError, TimeoutError, CaptureSizeError
+from hogtrace.serialization import (
+    program_to_json, program_from_json,
+    serialize_program, deserialize_program
+)
 
 
 class ParseError(Exception):

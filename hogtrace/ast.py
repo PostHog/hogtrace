@@ -255,7 +255,7 @@ class Program:
     """A complete HogTrace program (collection of probes)"""
     probes: list[Probe]
 
-    def __init__(self, probes: list[Probe] = None):
+    def __init__(self, probes: Optional[list[Probe]] = None):
         self.probes = probes or []
 
     def __str__(self):

@@ -5,7 +5,10 @@ Safely evaluates HogTrace expressions using frame context and request store.
 """
 
 import operator
+import signal
+import sys
 from typing import Any, Optional
+from contextlib import contextmanager
 
 from hogtrace.ast import (
     Expression, Literal, Identifier, FieldAccess, IndexAccess,
@@ -14,7 +17,8 @@ from hogtrace.ast import (
 from hogtrace.frame import FrameContext
 from hogtrace.request_store import RequestLocalStore
 from hogtrace.builtins import call_builtin, is_safe_function
-from hogtrace.errors import EvaluationError, RecursionError as HogTraceRecursionError
+from hogtrace.errors import EvaluationError, RecursionError as HogTraceRecursionError, TimeoutError
+from hogtrace.limits import HogTraceLimits, DEFAULT_LIMITS
 
 
 class ExpressionEvaluator:
@@ -23,9 +27,6 @@ class ExpressionEvaluator:
 
     Handles all expression types and provides safety mechanisms.
     """
-
-    # Maximum recursion depth for expression evaluation
-    MAX_DEPTH = 100
 
     # Binary operators mapping
     BINARY_OPS = {
@@ -47,10 +48,12 @@ class ExpressionEvaluator:
     def __init__(
         self,
         frame_context: FrameContext,
-        request_store: Optional[RequestLocalStore] = None
+        request_store: Optional[RequestLocalStore] = None,
+        limits: Optional[HogTraceLimits] = None
     ):
         self.frame_context = frame_context
         self.request_store = request_store or RequestLocalStore()
+        self.limits = limits or DEFAULT_LIMITS
         self._depth = 0
 
     def evaluate(self, expr: Expression) -> Any:
@@ -66,11 +69,14 @@ class ExpressionEvaluator:
         Raises:
             EvaluationError: If evaluation fails
             RecursionError: If recursion depth exceeded
+            TimeoutError: If evaluation exceeds timeout
         """
         # Check recursion depth
         self._depth += 1
-        if self._depth > self.MAX_DEPTH:
-            raise HogTraceRecursionError(f"Expression recursion depth exceeded {self.MAX_DEPTH}")
+        if self._depth > self.limits.max_recursion_depth:
+            raise HogTraceRecursionError(
+                f"Expression recursion depth exceeded {self.limits.max_recursion_depth}"
+            )
 
         try:
             result = self._evaluate_expr(expr)
@@ -194,9 +200,15 @@ class ExpressionEvaluator:
         Raises:
             EvaluationError: If attribute access fails
         """
-        # Don't allow access to private/magic attributes
-        if attr.startswith('_'):
-            raise EvaluationError(f"Access to private attribute '{attr}' is not allowed")
+        # Check for private attributes (single underscore)
+        if attr.startswith('_') and not attr.startswith('__'):
+            if not self.limits.allow_private_attributes:
+                raise EvaluationError(f"Access to private attribute '{attr}' is not allowed")
+
+        # Check for dunder attributes (double underscore)
+        if attr.startswith('__') and attr.endswith('__'):
+            if not self.limits.allow_dunder_attributes:
+                raise EvaluationError(f"Access to dunder attribute '{attr}' is not allowed")
 
         try:
             return getattr(obj, attr)
@@ -229,21 +241,76 @@ class ExpressionEvaluator:
             raise EvaluationError(f"Error accessing index {index}: {e}")
 
 
+@contextmanager
+def timeout_context(timeout_ms: Optional[int]):
+    """
+    Context manager for evaluation timeout using SIGALRM (Unix only).
+
+    On non-Unix systems or when timeout is None, this is a no-op.
+
+    Args:
+        timeout_ms: Timeout in milliseconds, or None to disable
+
+    Raises:
+        TimeoutError: If evaluation exceeds timeout
+    """
+    if timeout_ms is None:
+        # No timeout
+        yield
+        return
+
+    # Check if platform supports SIGALRM
+    if not hasattr(signal, 'SIGALRM'):
+        # Windows or other platforms - no timeout support
+        # For production on Windows, consider using threading.Timer
+        yield
+        return
+
+    def timeout_handler(signum, frame):
+        raise TimeoutError(f"Expression evaluation exceeded {timeout_ms}ms timeout")
+
+    # Convert ms to seconds for alarm
+    timeout_sec = timeout_ms / 1000.0
+
+    # Set the signal handler and alarm
+    old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+    signal.setitimer(signal.ITIMER_REAL, timeout_sec)
+
+    try:
+        yield
+    finally:
+        # Cancel the alarm and restore handler
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old_handler)
+
+
 def evaluate_expression(
     expr: Expression,
     frame_context: FrameContext,
-    request_store: Optional[RequestLocalStore] = None
+    request_store: Optional[RequestLocalStore] = None,
+    limits: Optional[HogTraceLimits] = None,
+    timeout_ms: Optional[int] = None
 ) -> Any:
     """
-    Convenience function to evaluate an expression.
+    Convenience function to evaluate an expression with optional timeout.
 
     Args:
         expr: Expression to evaluate
         frame_context: Frame context
         request_store: Request-scoped storage
+        limits: Resource limits (uses DEFAULT_LIMITS if not provided)
+        timeout_ms: Timeout in milliseconds (overrides limits.max_predicate_time_ms if provided)
 
     Returns:
         Evaluated value
+
+    Raises:
+        TimeoutError: If evaluation exceeds timeout
     """
-    evaluator = ExpressionEvaluator(frame_context, request_store)
-    return evaluator.evaluate(expr)
+    effective_limits = limits or DEFAULT_LIMITS
+    effective_timeout = timeout_ms if timeout_ms is not None else effective_limits.max_predicate_time_ms
+
+    evaluator = ExpressionEvaluator(frame_context, request_store, effective_limits)
+
+    with timeout_context(effective_timeout):
+        return evaluator.evaluate(expr)
