@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package hogtrace.vm;
+
+// Top-level program containing all probes and shared constant pool
+message Program {
+  uint32 version = 1;              // Bytecode version for compatibility checking
+  ConstantPool constant_pool = 2;   // Shared constant pool for all probes
+  repeated Probe probes = 3;        // All probes in the program
+  float sampling = 4;               // Program-level sampling rate (0.0-1.0)
+}
+
+// Constant pool with all constants used across all bytecode
+message ConstantPool {
+  repeated Constant constants = 1;
+}
+
+// A constant value - uses oneof for compact representation
+message Constant {
+  oneof value {
+    int64 int_value = 1;            // Integer constants
+    double float_value = 2;          // Float constants
+    string string_value = 3;         // String literals
+    bool bool_value = 4;             // Boolean true/false
+    NoneValue none_value = 5;        // None/null value
+    string identifier = 6;           // Variable names: "args", "arg0", "retval", etc.
+    string field_name = 7;           // Field/attribute names for access operations
+    string function_name = 8;        // Function names: "timestamp", "rand", "capture", etc.
+  }
+}
+
+// Sentinel type for None/null values
+message NoneValue {}
+
+// A single probe definition
+message Probe {
+  string id = 1;                    // Unique probe identifier
+  ProbeSpec spec = 2;               // Probe point specification
+  bytes predicate = 4;              // Predicate bytecode (empty if no predicate)
+  bytes body = 5;                   // Action body bytecode
+}
+
+// Probe specification - extensible for different probe types
+message ProbeSpec {
+  oneof spec {
+    FnProbeSpec fn = 1;             // Function probe (only type for now)
+  }
+}
+
+// Function probe specification
+message FnProbeSpec {
+  string function_specifier = 1;    // e.g., "myapp.users.create_user" or "myapp.users.*"
+  FnProbeTarget target = 2;         // Entry or exit
+}
+
+// Function probe targets
+enum FnProbeTarget {
+  ENTRY = 0;                        // Function entry point
+  EXIT = 1;                         // Function exit point
+}
