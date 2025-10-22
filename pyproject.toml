@@ -38,11 +38,11 @@ dev = [
 ]
 
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
 
-[tool.setuptools]
-packages = ["hogtrace"]
-
-[tool.setuptools.package-data]
-hogtrace = ["py.typed"]
+[tool.maturin]
+module-name = "hogtrace._vm_rust"
+python-source = "."
+manifest-path = "vm/Cargo.toml"
+features = ["pyo3/extension-module"]

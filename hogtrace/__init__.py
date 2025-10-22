@@ -41,7 +41,6 @@ __all__ = [
     "Program",
     # VM
     "ProbeExecutor",
-    "ProgramExecutor",
     "RequestLocalStore",
     "RequestContext",
     # Limits
@@ -65,7 +64,7 @@ __all__ = [
 ]
 
 # Import VM components for convenience
-from hogtrace.vm import ProbeExecutor, ProgramExecutor
+from hogtrace.vm import ProbeExecutor
 from hogtrace.request_store import RequestLocalStore, RequestContext
 from hogtrace.limits import HogTraceLimits, DEFAULT_LIMITS, STRICT_LIMITS, RELAXED_LIMITS
 from hogtrace import logger

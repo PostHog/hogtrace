@@ -46,6 +46,9 @@ pub mod python_dispatcher;
 // Parser
 pub mod parser;
 
+// Python bindings (PyO3)
+pub mod python_bindings;
+
 // Re-export main types for convenience
 pub use constant_pool::{Constant, ConstantPool};
 pub use dispatcher::{BinaryOp, ComparisonOp, Dispatcher};

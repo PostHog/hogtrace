@@ -3,10 +3,14 @@ name = "vm"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "hogtrace"
+crate-type = ["cdylib"]
+
 [dependencies]
 prost = "0.14.1"
 prost-types = "0.14.1"
-pyo3 = "0.27.1"
+pyo3 = { version = "0.27.1", features = ["extension-module"] }
 
 [build-dependencies]
 prost-build = "0.14.1"

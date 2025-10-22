@@ -5,6 +5,13 @@ use pyo3::types::{PyBool, PyDict, PyFloat, PyFrame, PyInt, PyString, PyTuple};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Captured event data from capture() calls
+#[derive(Debug)]
+pub struct CaptureEvent {
+    /// Named arguments as key-value pairs
+    pub data: HashMap<String, Value>,
+}
+
 /// Python-specific dispatcher implementation using PyO3
 ///
 /// This dispatcher handles all Python-specific operations:
@@ -31,6 +38,9 @@ pub struct PythonDispatcher<'py> {
 
     /// Request-scoped variables storage ($req.* / $request.*)
     request_vars: HashMap<String, Value>,
+
+    /// Accumulated capture events from capture() calls
+    captures: Vec<CaptureEvent>,
 }
 
 impl<'py> PythonDispatcher<'py> {
@@ -43,6 +53,7 @@ impl<'py> PythonDispatcher<'py> {
             retval: None,
             exception: None,
             request_vars: HashMap::new(),
+            captures: Vec::new(),
         }
     }
 
@@ -60,7 +71,24 @@ impl<'py> PythonDispatcher<'py> {
             retval,
             exception,
             request_vars: HashMap::new(),
+            captures: Vec::new(),
         }
+    }
+
+    /// Get all accumulated capture events
+    pub fn take_captures(&mut self) -> Vec<CaptureEvent> {
+        std::mem::take(&mut self.captures)
+    }
+
+    /// Convert a CaptureEvent to a Python dictionary
+    pub fn capture_to_py_dict(&self, capture: &CaptureEvent) -> PyResult<Py<PyDict>> {
+        let dict = PyDict::new(self.py);
+        for (key, value) in &capture.data {
+            let py_value = self.value_to_py(value)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e))?;
+            dict.set_item(key, py_value)?;
+        }
+        Ok(dict.into())
     }
 
     /// Helper: convert Python object to Value
@@ -109,9 +137,7 @@ impl<'py> PythonDispatcher<'py> {
         // This is a simplified implementation - in production, you'd need to
         // properly extract arguments from the frame based on the code object
         let locals = self.frame.getattr("f_locals")
-            .map_err(|e| format!("Failed to get f_locals: {}", e))?
-            .call0()
-            .map_err(|e| format!("Failed to call f_locals: {}", e))?;
+            .map_err(|e| format!("Failed to get f_locals: {}", e))?;
 
         let args = locals
             .get_item("args")
@@ -126,9 +152,7 @@ impl<'py> PythonDispatcher<'py> {
         // Similar to get_args, but extract specific argument
         // This is simplified - proper implementation would inspect the code object
         let locals = self.frame.getattr("f_locals")
-            .map_err(|e| format!("Failed to get f_locals: {}", e))?
-            .call0()
-            .map_err(|e| format!("Failed to call f_locals: {}", e))?;
+            .map_err(|e| format!("Failed to get f_locals: {}", e))?;
 
         // Try to get from args tuple
         if let Ok(args_obj) = locals.get_item("args") {
@@ -186,9 +210,7 @@ impl<'py> Dispatcher for PythonDispatcher<'py> {
             "kwargs" => {
                 // Get keyword arguments from frame
                 let locals = self.frame.getattr("f_locals")
-                    .map_err(|e| format!("Failed to get f_locals: {}", e))?
-                    .call0()
-                    .map_err(|e| format!("Failed to call f_locals: {}", e))?;
+                    .map_err(|e| format!("Failed to get f_locals: {}", e))?;
                 let kwargs = locals
                     .get_item("kwargs")
                     .ok()
@@ -216,9 +238,7 @@ impl<'py> Dispatcher for PythonDispatcher<'py> {
             "self" => {
                 // Get 'self' from locals (for method calls)
                 let locals = self.frame.getattr("f_locals")
-                    .map_err(|e| format!("Failed to get f_locals: {}", e))?
-                    .call0()
-                    .map_err(|e| format!("Failed to call f_locals: {}", e))?;
+                    .map_err(|e| format!("Failed to get f_locals: {}", e))?;
                 locals
                     .get_item("self")
                     .map_err(|e| format!("'self' not found: {}", e))
@@ -227,17 +247,13 @@ impl<'py> Dispatcher for PythonDispatcher<'py> {
             "locals" => {
                 // Return all local variables as a dict
                 let locals = self.frame.getattr("f_locals")
-                    .map_err(|e| format!("Failed to get f_locals: {}", e))?
-                    .call0()
-                    .map_err(|e| format!("Failed to call f_locals: {}", e))?;
+                    .map_err(|e| format!("Failed to get f_locals: {}", e))?;
                 self.py_to_value(&locals)
             }
             "globals" => {
                 // Return all global variables as a dict
                 let globals = self.frame.getattr("f_globals")
-                    .map_err(|e| format!("Failed to get f_globals: {}", e))?
-                    .call0()
-                    .map_err(|e| format!("Failed to call f_globals: {}", e))?;
+                    .map_err(|e| format!("Failed to get f_globals: {}", e))?;
                 self.py_to_value(&globals)
             }
             _ => {
@@ -250,9 +266,7 @@ impl<'py> Dispatcher for PythonDispatcher<'py> {
 
                 // Try to get from frame locals
                 let locals = self.frame.getattr("f_locals")
-                    .map_err(|e| format!("Failed to get f_locals: {}", e))?
-                    .call0()
-                    .map_err(|e| format!("Failed to call f_locals: {}", e))?;
+                    .map_err(|e| format!("Failed to get f_locals: {}", e))?;
                 locals
                     .get_item(name)
                     .map_err(|e| format!("Variable {} not found: {}", name, e))
@@ -345,9 +359,45 @@ impl<'py> Dispatcher for PythonDispatcher<'py> {
             }
 
             "capture" | "send" => {
-                // TODO: Implement actual PostHog capture
-                // For now, just log or return None
-                println!("capture({:?})", args);
+                // Accumulate capture events instead of sending directly
+                let mut data = HashMap::new();
+
+                // Check if this is named arguments (even count, odd indices are strings)
+                let is_named = args.len() % 2 == 0
+                    && args.iter().step_by(2).all(|v| matches!(v, Value::String(_)));
+
+                if is_named {
+                    // Named arguments: args = [name1, value1, name2, value2, ...]
+                    for i in (0..args.len()).step_by(2) {
+                        if let Value::String(key) = &args[i] {
+                            // Clone the value manually since Value doesn't implement Clone
+                            let value = match &args[i + 1] {
+                                Value::Bool(b) => Value::Bool(*b),
+                                Value::Int(n) => Value::Int(*n),
+                                Value::Float(f) => Value::Float(*f),
+                                Value::String(s) => Value::String(s.clone()),
+                                Value::None => Value::None,
+                                Value::Object(_) => Value::None, // Can't clone objects
+                            };
+                            data.insert(key.clone(), value);
+                        }
+                    }
+                } else {
+                    // Positional arguments: store as "arg0", "arg1", etc.
+                    for (i, arg) in args.into_iter().enumerate() {
+                        let value = match arg {
+                            Value::Bool(b) => Value::Bool(b),
+                            Value::Int(n) => Value::Int(n),
+                            Value::Float(f) => Value::Float(f),
+                            Value::String(s) => Value::String(s),
+                            Value::None => Value::None,
+                            Value::Object(_) => Value::None,
+                        };
+                        data.insert(format!("arg{}", i), value);
+                    }
+                }
+
+                self.captures.push(CaptureEvent { data });
                 Ok(Value::None)
             }
 
@@ -380,5 +430,26 @@ impl<'py> Dispatcher for PythonDispatcher<'py> {
                 self.py_to_value(&result)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_capture_event_creation() {
+        let mut data = HashMap::new();
+        data.insert("user_id".to_string(), Value::Int(42));
+        data.insert("event".to_string(), Value::String("login".to_string()));
+
+        let capture = CaptureEvent { data };
+
+        assert_eq!(capture.data.len(), 2);
+        assert!(matches!(capture.data.get("user_id"), Some(Value::Int(42))));
+        assert!(matches!(
+            capture.data.get("event"),
+            Some(Value::String(s)) if s == "login"
+        ));
     }
 }
