@@ -1,6 +1,0 @@
-fn:myapp.handler:entry
-{
-    $req.user_id = arg0.id;
-    $req.start_time = timestamp();
-    capture(user=$req.user_id);
-}

@@ -48,4 +48,4 @@ generated/
 .DS_Store
 Thumbs.db
 
-vm/target/
+target/

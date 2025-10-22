@@ -1,6 +1,0 @@
-fn:myapp.api.endpoint:entry
-/ rand() < 0.1 /
-{
-    sample 10%;
-    capture(args);
-}

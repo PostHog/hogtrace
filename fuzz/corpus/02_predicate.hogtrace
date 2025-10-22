@@ -1,5 +1,0 @@
-fn:myapp.test:entry
-/ arg0 > 10 /
-{
-    capture(arg0);
-}

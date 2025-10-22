@@ -44,5 +44,4 @@ build-backend = "maturin"
 [tool.maturin]
 module-name = "hogtrace._vm_rust"
 python-source = "."
-manifest-path = "vm/Cargo.toml"
 features = ["pyo3/extension-module"]
