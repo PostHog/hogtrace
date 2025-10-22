@@ -4,8 +4,11 @@ Type stubs for the HogTrace Rust VM extension module.
 This module provides Python bindings to the Rust-based HogTrace virtual machine.
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, TYPE_CHECKING
 from types import FrameType
+
+if TYPE_CHECKING:
+    from hogtrace.request_store import RequestLocalStore
 
 # Module constants
 BYTECODE_VERSION: int
@@ -124,6 +127,7 @@ def execute_probe(
     program: Program,
     probe: Probe,
     frame: FrameType,
+    store: "RequestLocalStore",
     retval: Optional[Any] = None,
     exception: Optional[BaseException] = None,
 ) -> Optional[Dict[str, Any]]:
@@ -133,6 +137,7 @@ def execute_probe(
         program: The compiled program containing the probe
         probe: The probe to execute
         frame: Python frame object
+        store: RequestLocalStore for cross-probe variable persistence
         retval: Optional return value (for exit probes)
         exception: Optional exception (for exit probes)
 
@@ -141,10 +146,12 @@ def execute_probe(
 
     Example:
         >>> import sys
+        >>> from hogtrace.request_store import RequestLocalStore
         >>> program = compile("fn:test:entry { capture(arg0=args[0]); }")
         >>> probe = program.probes[0]
         >>> frame = sys._getframe()
-        >>> result = execute_probe(program, probe, frame)
+        >>> store = RequestLocalStore()
+        >>> result = execute_probe(program, probe, frame, store)
     """
     ...
 
@@ -152,17 +159,20 @@ class ProbeExecutor:
     """Probe executor for executing probes against Python frames.
 
     Example:
+        >>> from hogtrace.request_store import RequestLocalStore
         >>> program = compile("fn:test:entry { capture(args); }")
-        >>> executor = ProbeExecutor(program, program.probes[0])
+        >>> store = RequestLocalStore()
+        >>> executor = ProbeExecutor(program, program.probes[0], store)
         >>> result = executor.execute(frame)
     """
 
-    def __init__(self, program: Program, probe: Probe) -> None:
+    def __init__(self, program: Program, probe: Probe, store: "RequestLocalStore") -> None:
         """Create a new probe executor.
 
         Args:
             program: The compiled program
             probe: The probe to execute
+            store: RequestLocalStore for cross-probe variable persistence
         """
         ...
 

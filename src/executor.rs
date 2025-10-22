@@ -127,6 +127,14 @@ impl<'a, D: Dispatcher> Executor<'a, D> {
                     self.stack.push(value);
                 }
 
+                Opcode::SetAttr => {
+                    let index = self.read_u16(bytecode, &mut i)?;
+                    let attr_name = self.constant_pool.get_string(index)?;
+                    let value = self.pop()?;
+                    let obj = self.pop()?;
+                    self.dispatcher.set_attribute(&obj, attr_name, value)?;
+                }
+
                 Opcode::GetItem => {
                     let key = self.pop()?;
                     let obj = self.pop()?;
@@ -278,6 +286,11 @@ mod tests {
                 "status" => Ok(Value::String("ok".to_string())),
                 _ => Ok(Value::None),
             }
+        }
+
+        fn set_attribute(&mut self, _obj: &Value, _attr: &str, _value: Value) -> Result<(), String> {
+            // Mock implementation - just succeed
+            Ok(())
         }
 
         fn get_item(&mut self, _obj: &Value, _key: &Value) -> Result<Value, String> {

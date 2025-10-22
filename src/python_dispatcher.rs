@@ -5,6 +5,14 @@ use pyo3::types::{PyBool, PyDict, PyFloat, PyFrame, PyInt, PyString, PyTuple};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Marker type for the request store proxy
+///
+/// When LoadVar("$req") or LoadVar("$request") is executed, we return
+/// Value::Object(Box::new(RequestStoreProxy)) to represent the request store.
+/// This allows GetAttr and SetAttr operations to interact with the RequestLocalStore.
+#[derive(Debug)]
+struct RequestStoreProxy;
+
 /// Captured event data from capture() calls
 #[derive(Debug)]
 pub struct CaptureEvent {
@@ -16,7 +24,7 @@ pub struct CaptureEvent {
 ///
 /// This dispatcher handles all Python-specific operations:
 /// - Variable access (args, kwargs, retval, exception, etc.) from the Python frame
-/// - Request-scoped variables ($req.*)
+/// - Request-scoped variables ($req.*) via RequestLocalStore
 /// - Attribute access on Python objects
 /// - Item access (dict keys, list indices)
 /// - Built-in function calls (timestamp, rand, capture, etc.)
@@ -36,8 +44,8 @@ pub struct PythonDispatcher<'py> {
     /// Exception (only available in exit probes, None if no exception)
     exception: Option<Py<PyAny>>,
 
-    /// Request-scoped variables storage ($req.* / $request.*)
-    request_vars: HashMap<String, Value>,
+    /// Request-scoped variables storage (Python RequestLocalStore instance)
+    store: Py<PyAny>,
 
     /// Accumulated capture events from capture() calls
     captures: Vec<CaptureEvent>,
@@ -45,14 +53,14 @@ pub struct PythonDispatcher<'py> {
 
 impl<'py> PythonDispatcher<'py> {
     /// Create a new Python dispatcher for an entry probe
-    pub fn new_entry(py: Python<'py>, frame: Bound<'py, PyFrame>) -> Self {
+    pub fn new_entry(py: Python<'py>, frame: Bound<'py, PyFrame>, store: Py<PyAny>) -> Self {
         PythonDispatcher {
             py,
             frame,
             is_exit: false,
             retval: None,
             exception: None,
-            request_vars: HashMap::new(),
+            store,
             captures: Vec::new(),
         }
     }
@@ -63,6 +71,7 @@ impl<'py> PythonDispatcher<'py> {
         frame: Bound<'py, PyFrame>,
         retval: Option<Py<PyAny>>,
         exception: Option<Py<PyAny>>,
+        store: Py<PyAny>,
     ) -> Self {
         PythonDispatcher {
             py,
@@ -70,7 +79,7 @@ impl<'py> PythonDispatcher<'py> {
             is_exit: true,
             retval,
             exception,
-            request_vars: HashMap::new(),
+            store,
             captures: Vec::new(),
         }
     }
@@ -189,19 +198,9 @@ impl<'py> PythonDispatcher<'py> {
 
 impl<'py> Dispatcher for PythonDispatcher<'py> {
     fn load_variable(&mut self, name: &str) -> Result<Value, String> {
-        // Handle request-scoped variables
-        if name.starts_with("$req.") || name.starts_with("$request.") {
-            let var_name = if name.starts_with("$req.") {
-                &name[5..]
-            } else {
-                &name[9..]
-            };
-
-            return self
-                .request_vars
-                .get(var_name)
-                .ok_or_else(|| format!("Request variable {} not set", name))
-                .and_then(|v| self.copy_value(v));
+        // Handle request-scoped variables - return proxy for $req/$request
+        if name == "$req" || name == "$request" {
+            return Ok(Value::Object(Box::new(RequestStoreProxy)));
         }
 
         // Handle special variables
@@ -276,31 +275,49 @@ impl<'py> Dispatcher for PythonDispatcher<'py> {
     }
 
     fn store_variable(&mut self, name: &str, value: Value) -> Result<(), String> {
-        // Only request-scoped variables can be stored
-        if name.starts_with("$req.") || name.starts_with("$request.") {
-            let var_name = if name.starts_with("$req.") {
-                &name[5..]
-            } else {
-                &name[9..]
-            };
-
-            self.request_vars.insert(var_name.to_string(), value);
-            Ok(())
-        } else {
-            Err(format!(
-                "Cannot store to variable {} (only $req.* variables can be assigned)",
-                name
-            ))
-        }
+        // StoreVar is no longer used for request variables (they use SetAttr now)
+        // This method is kept for potential future use with other variable types
+        Err(format!(
+            "Cannot store to variable {} (use SetAttr for $req.* assignments)",
+            name
+        ))
     }
 
     fn get_attribute(&mut self, obj: &Value, attr: &str) -> Result<Value, String> {
-        let py_obj = self.value_to_py(obj)?;
+        // Check if this is the request store proxy
+        if let Value::Object(boxed) = obj {
+            if boxed.downcast_ref::<RequestStoreProxy>().is_some() {
+                // Call store.get(attr) which returns None if not set
+                let result = self.store
+                    .call_method1(self.py, "get", (attr,))
+                    .map_err(|e| format!("Failed to get request variable {}: {}", attr, e))?;
+                return self.py_to_value(&result.bind(self.py));
+            }
+        }
 
+        // Regular attribute access on Python objects
+        let py_obj = self.value_to_py(obj)?;
         py_obj
             .getattr(attr)
             .map_err(|e| format!("Failed to get attribute {}: {}", attr, e))
             .and_then(|result| self.py_to_value(&result))
+    }
+
+    fn set_attribute(&mut self, obj: &Value, attr: &str, value: Value) -> Result<(), String> {
+        // Check if this is the request store proxy
+        if let Value::Object(boxed) = obj {
+            if boxed.downcast_ref::<RequestStoreProxy>().is_some() {
+                // Convert value to Python and call store.set(attr, value)
+                let py_value = self.value_to_py(&value)?;
+                self.store
+                    .call_method1(self.py, "set", (attr, py_value))
+                    .map_err(|e| format!("Failed to set request variable {}: {}", attr, e))?;
+                return Ok(());
+            }
+        }
+
+        // Regular Python objects don't support attribute assignment through this interface
+        Err(format!("Cannot set attribute {} on non-request object", attr))
     }
 
     fn get_item(&mut self, obj: &Value, key: &Value) -> Result<Value, String> {

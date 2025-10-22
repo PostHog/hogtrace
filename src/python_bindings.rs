@@ -197,6 +197,7 @@ impl PyProbeSpec {
 /// Args:
 ///     probe: The probe to execute (must be from a compiled Program)
 ///     frame: Python frame object
+///     store: RequestLocalStore for cross-probe variable persistence
 ///     retval: Optional return value (for exit probes)
 ///     exception: Optional exception (for exit probes)
 ///
@@ -205,28 +206,32 @@ impl PyProbeSpec {
 ///
 /// Example:
 ///     >>> import sys
+///     >>> from hogtrace.request_store import RequestLocalStore
 ///     >>> program = compile("fn:test:entry { capture(arg0=args[0]); }")
 ///     >>> probe = program.probes[0]
 ///     >>> frame = sys._getframe()
-///     >>> result = execute_probe(program, probe, frame)
+///     >>> store = RequestLocalStore()
+///     >>> result = execute_probe(program, probe, frame, store)
 #[pyfunction]
-#[pyo3(signature = (program, probe, frame, retval=None, exception=None))]
+#[pyo3(signature = (program, probe, frame, store, retval=None, exception=None))]
 fn execute_probe<'py>(
     py: Python<'py>,
     program: &PyProgram,
     probe: &PyProbe,
     frame: Bound<'py, PyFrame>,
+    store: Bound<'py, PyAny>,
     retval: Option<Bound<'py, PyAny>>,
     exception: Option<Bound<'py, PyAny>>,
 ) -> PyResult<Option<Bound<'py, PyDict>>> {
     // Create dispatcher
     let retval_owned = retval.map(|r| r.unbind());
     let exception_owned = exception.map(|e| e.unbind());
+    let store_owned = store.unbind();
 
     let mut dispatcher = if retval_owned.is_some() || exception_owned.is_some() {
-        PythonDispatcher::new_exit(py, frame, retval_owned, exception_owned)
+        PythonDispatcher::new_exit(py, frame, retval_owned, exception_owned, store_owned)
     } else {
-        PythonDispatcher::new_entry(py, frame)
+        PythonDispatcher::new_entry(py, frame, store_owned)
     };
 
     // Create executor
@@ -236,16 +241,11 @@ fn execute_probe<'py>(
     if !probe.inner.predicate.is_empty() {
         match executor.execute(&probe.inner.predicate) {
             Ok(crate::value::Value::Bool(true)) => {
-                // Predicate passed, continue to body
-            }
-            Ok(crate::value::Value::Bool(false)) => {
-                // Predicate failed
-                return Ok(None);
+                // Only Bool(true) passes - continue to body
             }
             Ok(_) => {
-                return Err(PyRuntimeError::new_err(
-                    "Predicate must return a boolean value",
-                ));
+                // Any other value (Bool(false), None, int, string, etc.) fails
+                return Ok(None);
             }
             Err(e) => {
                 return Err(PyRuntimeError::new_err(format!("Predicate error: {}", e)));
@@ -275,21 +275,29 @@ fn execute_probe<'py>(
 /// Probe executor class for executing probes against Python frames
 ///
 /// Example:
+///     >>> from hogtrace.request_store import RequestLocalStore
 ///     >>> program = compile("fn:test:entry { capture(args); }")
-///     >>> executor = ProbeExecutor(program, program.probes[0])
+///     >>> store = RequestLocalStore()
+///     >>> executor = ProbeExecutor(program, program.probes[0], store)
 ///     >>> result = executor.execute(frame)
 #[pyclass(name = "ProbeExecutor")]
 struct PyProbeExecutor {
     program: PyProgram,
     probe: PyProbe,
+    store: Py<PyAny>,
 }
 
 #[pymethods]
 impl PyProbeExecutor {
     /// Create a new probe executor
+    ///
+    /// Args:
+    ///     program: Compiled program
+    ///     probe: Probe to execute
+    ///     store: RequestLocalStore for cross-probe variables
     #[new]
-    fn new(program: PyProgram, probe: PyProbe) -> Self {
-        PyProbeExecutor { program, probe }
+    fn new(program: PyProgram, probe: PyProbe, store: Py<PyAny>) -> Self {
+        PyProbeExecutor { program, probe, store }
     }
 
     /// Execute the probe against a Python frame
@@ -309,7 +317,8 @@ impl PyProbeExecutor {
         retval: Option<Bound<'py, PyAny>>,
         exception: Option<Bound<'py, PyAny>>,
     ) -> PyResult<Option<Bound<'py, PyDict>>> {
-        execute_probe(py, &self.program, &self.probe, frame, retval, exception)
+        let store_bound = self.store.bind(py).clone();
+        execute_probe(py, &self.program, &self.probe, frame, store_bound, retval, exception)
     }
 
     fn __repr__(&self) -> String {
@@ -319,7 +328,7 @@ impl PyProbeExecutor {
 
 /// Python module definition
 #[pymodule]
-fn _vm_rust(m: &Bound<'_, pyo3::types::PyModule>) -> PyResult<()> {
+fn vm(m: &Bound<'_, pyo3::types::PyModule>) -> PyResult<()> {
     // Add functions
     m.add_function(wrap_pyfunction!(compile, m)?)?;
     m.add_function(wrap_pyfunction!(execute_probe, m)?)?;

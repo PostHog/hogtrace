@@ -35,6 +35,14 @@ pub trait Dispatcher {
     /// - attr: the attribute name
     fn get_attribute(&mut self, obj: &Value, attr: &str) -> Result<Value, String>;
 
+    /// Set an attribute on an object: obj.field = value
+    ///
+    /// Example: $req.user_id = 123
+    /// - obj: the object (typically the request store proxy for $req.*)
+    /// - attr: the attribute name
+    /// - value: the value to set
+    fn set_attribute(&mut self, obj: &Value, attr: &str, value: Value) -> Result<(), String>;
+
     /// Get an item from an object: obj[key]
     ///
     /// Example: args[0], retval["status"], data[idx]

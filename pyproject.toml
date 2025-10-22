@@ -4,10 +4,7 @@ version = "0.1.0"
 description = "DTrace-inspired instrumentation language for Python web applications"
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = [
-    "antlr4-tools>=0.2.2",
-    "antlr4-python3-runtime==4.13.1",
-]
+dependencies = []
 authors = [
     {name = "PostHog", email = "hey@posthog.com"}
 ]
@@ -42,6 +39,6 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [tool.maturin]
-module-name = "hogtrace._vm_rust"
+module-name = "hogtrace.vm"
 python-source = "."
 features = ["pyo3/extension-module"]

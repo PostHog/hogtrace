@@ -178,8 +178,8 @@ impl Compiler {
 
             AstExpr::RequestVar { var, .. } => {
                 // $request.field or $req.field
-                // Compile as: LoadVar(request/req), GetAttr(field)
-                let var_name = if var.is_request { "request" } else { "req" };
+                // Compile as: LoadVar($request/$req), GetAttr(field)
+                let var_name = if var.is_request { "$request" } else { "$req" };
                 let var_idx = self.add_or_get_constant(Constant::Identifier(var_name.to_string()));
                 self.emit_u16(Opcode::LoadVar, var_idx);
 
@@ -274,37 +274,21 @@ impl Compiler {
     fn compile_stmt(&mut self, stmt: &AstStatement) -> ParseResult<()> {
         match stmt {
             AstStatement::Assignment { var, value, .. } => {
-                // Compile the value expression (pushes result onto stack)
+                // Assignment to request variable: $req.field = value
+                // Compile as: LoadVar($req), value, SetAttr(field)
+                // Stack: [] -> [proxy] -> [proxy, value] -> []
+
+                // 1. Load the request store proxy
+                let var_name = if var.is_request { "$request" } else { "$req" };
+                let var_idx = self.add_or_get_constant(Constant::Identifier(var_name.to_string()));
+                self.emit_u16(Opcode::LoadVar, var_idx);
+
+                // 2. Compile the value expression (pushes value onto stack)
                 self.compile_expr(value)?;
 
-                // For assignment to request variable, we need:
-                // LoadVar(request/req), swap, SetAttr(field)
-                // But we don't have swap! So instead we do:
-                // Compile value first (already done above)
-                // Then StoreVar to the full path
-
-                // Actually, looking at the VM opcodes, StoreVar is for simple variables
-                // For $req.field, we need to:
-                // 1. Load req
-                // 2. Compile value
-                // 3. SetAttr or similar
-
-                // Wait, let me re-check the opcodes...
-                // LoadVar, StoreVar are for variables
-                // GetAttr is for reading obj.field
-                // But there's no SetAttr for writing!
-
-                // For now, let's assume StoreVar works with dotted paths
-                // We'll compile it as: value, StoreVar("req.field")
-
-                let var_name = if var.is_request {
-                    format!("request.{}", var.field)
-                } else {
-                    format!("req.{}", var.field)
-                };
-
-                let idx = self.add_or_get_constant(Constant::Identifier(var_name));
-                self.emit_u16(Opcode::StoreVar, idx);
+                // 3. Set the attribute on the proxy
+                let field_idx = self.add_or_get_constant(Constant::FieldName(var.field.clone()));
+                self.emit_u16(Opcode::SetAttr, field_idx);
             }
 
             AstStatement::Capture { is_send, args, span } => {
@@ -647,10 +631,10 @@ mod tests {
     fn test_compile_request_var() {
         let (bytecode, pool) = compile_expr_helper("$req.user_id");
 
-        // Should be: LoadVar(req), GetAttr(user_id)
+        // Should be: LoadVar($req), GetAttr(user_id)
         assert_eq!(bytecode[0], Opcode::LoadVar as u8);
         let idx1 = u16::from_le_bytes([bytecode[1], bytecode[2]]);
-        assert!(matches!(pool.get(idx1).unwrap(), Constant::Identifier(s) if s == "req"));
+        assert!(matches!(pool.get(idx1).unwrap(), Constant::Identifier(s) if s == "$req"));
 
         assert_eq!(bytecode[3], Opcode::GetAttr as u8);
         let idx2 = u16::from_le_bytes([bytecode[4], bytecode[5]]);
@@ -874,12 +858,16 @@ mod tests {
     fn test_compile_assignment() {
         let (bytecode, pool) = compile_stmt_helper("$req.user_id = 42;");
 
-        // Should be: PushConst(42), StoreVar(req.user_id)
-        assert_eq!(bytecode[0], Opcode::PushConst as u8);
-        assert_eq!(bytecode[3], Opcode::StoreVar as u8);
+        // Should be: LoadVar($req), PushConst(42), SetAttr(user_id)
+        assert_eq!(bytecode[0], Opcode::LoadVar as u8);
+        let var_idx = u16::from_le_bytes([bytecode[1], bytecode[2]]);
+        assert!(matches!(pool.get(var_idx).unwrap(), Constant::Identifier(s) if s == "$req"));
 
-        let idx = u16::from_le_bytes([bytecode[4], bytecode[5]]);
-        assert!(matches!(pool.get(idx).unwrap(), Constant::Identifier(s) if s == "req.user_id"));
+        assert_eq!(bytecode[3], Opcode::PushConst as u8);
+
+        assert_eq!(bytecode[6], Opcode::SetAttr as u8);
+        let field_idx = u16::from_le_bytes([bytecode[7], bytecode[8]]);
+        assert!(matches!(pool.get(field_idx).unwrap(), Constant::FieldName(s) if s == "user_id"));
     }
 
     #[test]
@@ -1134,10 +1122,11 @@ fn:myapp.test2:entry
 
         println!("Assignment bytecode size: {} bytes", bytecode.len());
 
-        // Expected: PushConst(42), StoreVar(req.user_id)
-        assert_eq!(bytecode.len(), 6);
-        assert_eq!(bytecode[0], Opcode::PushConst as u8);
-        assert_eq!(bytecode[3], Opcode::StoreVar as u8);
+        // Expected: LoadVar($req) [3], PushConst(42) [3], SetAttr(user_id) [3] = 9 bytes
+        assert_eq!(bytecode.len(), 9);
+        assert_eq!(bytecode[0], Opcode::LoadVar as u8);
+        assert_eq!(bytecode[3], Opcode::PushConst as u8);
+        assert_eq!(bytecode[6], Opcode::SetAttr as u8);
     }
 
     #[test]
@@ -1185,14 +1174,15 @@ fn:myapp.test2:entry
 
         println!("Arithmetic expression bytecode size: {} bytes", bytecode.len());
 
-        // Expected: LoadVar(arg0), LoadVar(arg1), Add, PushConst(2), Mul, StoreVar(req.total)
-        assert_eq!(bytecode.len(), 14);
-        assert_eq!(bytecode[0], Opcode::LoadVar as u8); // arg0
-        assert_eq!(bytecode[3], Opcode::LoadVar as u8); // arg1
-        assert_eq!(bytecode[6], Opcode::Add as u8);
-        assert_eq!(bytecode[7], Opcode::PushConst as u8); // 2
-        assert_eq!(bytecode[10], Opcode::Mul as u8);
-        assert_eq!(bytecode[11], Opcode::StoreVar as u8); // req.total
+        // Expected: LoadVar($req) [3], LoadVar(arg0) [3], LoadVar(arg1) [3], Add [1], PushConst(2) [3], Mul [1], SetAttr(total) [3] = 17 bytes
+        assert_eq!(bytecode.len(), 17);
+        assert_eq!(bytecode[0], Opcode::LoadVar as u8); // $req
+        assert_eq!(bytecode[3], Opcode::LoadVar as u8); // arg0
+        assert_eq!(bytecode[6], Opcode::LoadVar as u8); // arg1
+        assert_eq!(bytecode[9], Opcode::Add as u8);
+        assert_eq!(bytecode[10], Opcode::PushConst as u8); // 2
+        assert_eq!(bytecode[13], Opcode::Mul as u8);
+        assert_eq!(bytecode[14], Opcode::SetAttr as u8); // total
     }
 
     #[test]
@@ -1273,11 +1263,11 @@ fn:myapp.test2:entry
 
         println!("Multiple statements bytecode size: {} bytes", bytecode.len());
 
-        // Statement 1: CallFunc(timestamp, 0) [4], StoreVar(req.start) [3] = 7 bytes
-        // Statement 2: LoadVar(arg0) [3], StoreVar(req.user_id) [3] = 6 bytes
+        // Statement 1: LoadVar($req) [3], CallFunc(timestamp, 0) [4], SetAttr(start) [3] = 10 bytes
+        // Statement 2: LoadVar($req) [3], LoadVar(arg0) [3], SetAttr(user_id) [3] = 9 bytes
         // Statement 3: LoadVar(args) [3], LoadVar(retval) [3], CallFunc(capture, 2) [4], Pop [1] = 11 bytes
-        // Total: 24 bytes
-        assert_eq!(bytecode.len(), 24);
+        // Total: 30 bytes
+        assert_eq!(bytecode.len(), 30);
     }
 
     #[test]

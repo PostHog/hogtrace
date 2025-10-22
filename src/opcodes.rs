@@ -59,6 +59,11 @@ pub enum Opcode {
     /// Stack: [obj, key] -> [value]
     GetItem = 0x51,
 
+    /// Set attribute on object: obj.field = value
+    /// Operand: u16 (constant pool index for field name)
+    /// Stack: [obj, value] -> []
+    SetAttr = 0x52,
+
     // Function calls
     /// Call function with N arguments
     /// Operands: u16 (constant pool index for function name), u8 (arg count)
@@ -92,6 +97,7 @@ impl Opcode {
             0x42 => Ok(Opcode::Not),
             0x50 => Ok(Opcode::GetAttr),
             0x51 => Ok(Opcode::GetItem),
+            0x52 => Ok(Opcode::SetAttr),
             0x60 => Ok(Opcode::CallFunc),
             _ => Err(format!("Unknown opcode: 0x{:02x}", byte)),
         }
@@ -101,7 +107,7 @@ impl Opcode {
     pub fn operand_size(&self) -> usize {
         match self {
             // Opcodes with u16 operand (2 bytes)
-            Opcode::PushConst | Opcode::LoadVar | Opcode::StoreVar | Opcode::GetAttr => 2,
+            Opcode::PushConst | Opcode::LoadVar | Opcode::StoreVar | Opcode::GetAttr | Opcode::SetAttr => 2,
 
             // CallFunc has u16 + u8 (3 bytes total)
             Opcode::CallFunc => 3,
