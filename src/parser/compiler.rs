@@ -1,13 +1,13 @@
 //! Compiler that converts AST to VM bytecode
 
 use super::ast::{
-    AstExpr, AstProgram, AstProbe, AstStatement, BinaryOp, UnaryOp,
-    ProbePoint, Provider, ModuleFunction, CaptureArgs
+    AstExpr, AstProbe, AstProgram, AstStatement, BinaryOp, CaptureArgs, ProbePoint, Provider,
+    UnaryOp,
 };
-use super::error::{ParseResult, ParseError, ErrorKind};
-use crate::{Program, Probe, ProbeSpec, FnTarget};
+use super::error::{ParseError, ParseResult};
 use crate::constant_pool::{Constant, ConstantPool};
 use crate::opcodes::Opcode;
+use crate::{FnTarget, Probe, ProbeSpec, Program};
 use std::collections::HashMap;
 
 /// Compiler that translates AST to VM bytecode
@@ -121,12 +121,6 @@ impl Compiler {
         self.bytecode.extend_from_slice(&bytes);
     }
 
-    /// Emit an opcode with a u8 operand
-    fn emit_u8(&mut self, opcode: Opcode, operand: u8) {
-        self.emit(opcode);
-        self.bytecode.push(operand);
-    }
-
     /// Emit CallFunc instruction (u16 function index + u8 arg count)
     fn emit_call(&mut self, func_index: u16, arg_count: u8) {
         self.emit(Opcode::CallFunc);
@@ -187,7 +181,12 @@ impl Compiler {
                 self.emit_u16(Opcode::GetAttr, field_idx);
             }
 
-            AstExpr::Binary { op, left, right, span } => {
+            AstExpr::Binary {
+                op,
+                left,
+                right,
+                span: _,
+            } => {
                 // Compile left operand (pushes value onto stack)
                 self.compile_expr(left)?;
 
@@ -225,7 +224,11 @@ impl Compiler {
                 }
             }
 
-            AstExpr::FieldAccess { object, field, span } => {
+            AstExpr::FieldAccess {
+                object,
+                field,
+                span: _,
+            } => {
                 // Compile object expression (pushes object onto stack)
                 self.compile_expr(object)?;
 
@@ -234,7 +237,11 @@ impl Compiler {
                 self.emit_u16(Opcode::GetAttr, idx);
             }
 
-            AstExpr::IndexAccess { object, index, span } => {
+            AstExpr::IndexAccess {
+                object,
+                index,
+                span: _,
+            } => {
                 // Compile object expression (pushes object onto stack)
                 self.compile_expr(object)?;
 
@@ -245,7 +252,11 @@ impl Compiler {
                 self.emit(Opcode::GetItem);
             }
 
-            AstExpr::Call { function, args, span } => {
+            AstExpr::Call {
+                function,
+                args,
+                span,
+            } => {
                 // Compile each argument (left to right)
                 for arg in args {
                     self.compile_expr(arg)?;
@@ -257,9 +268,14 @@ impl Compiler {
                 // Emit CallFunc with arg count
                 if args.len() > 255 {
                     return Err(ParseError::at_span(
-                        format!("Too many arguments to function '{}': {} (max 255)", function, args.len()),
-                        *span
-                    ));
+                        format!(
+                            "Too many arguments to function '{}': {} (max 255)",
+                            function,
+                            args.len()
+                        ),
+                        *span,
+                    )
+                    .boxed());
                 }
                 self.emit_call(idx, args.len() as u8);
             }
@@ -291,7 +307,11 @@ impl Compiler {
                 self.emit_u16(Opcode::SetAttr, field_idx);
             }
 
-            AstStatement::Capture { is_send, args, span } => {
+            AstStatement::Capture {
+                is_send,
+                args,
+                span,
+            } => {
                 // Compile capture/send as a function call
                 // Arguments are compiled as expressions
                 match args {
@@ -303,14 +323,20 @@ impl Compiler {
 
                         // Add function name to constant pool
                         let func_name = if *is_send { "send" } else { "capture" };
-                        let idx = self.add_or_get_constant(Constant::FunctionName(func_name.to_string()));
+                        let idx =
+                            self.add_or_get_constant(Constant::FunctionName(func_name.to_string()));
 
                         // Emit CallFunc
                         if exprs.len() > 255 {
                             return Err(ParseError::at_span(
-                                format!("Too many arguments to {}: {} (max 255)", func_name, exprs.len()),
-                                *span
-                            ));
+                                format!(
+                                    "Too many arguments to {}: {} (max 255)",
+                                    func_name,
+                                    exprs.len()
+                                ),
+                                *span,
+                            )
+                            .boxed());
                         }
                         self.emit_call(idx, exprs.len() as u8);
                     }
@@ -323,7 +349,8 @@ impl Compiler {
                         // For each named argument, push the name as a string, then the value
                         for named_arg in entries {
                             // Push the name as a string
-                            let name_idx = self.add_or_get_constant(Constant::String(named_arg.name.clone()));
+                            let name_idx =
+                                self.add_or_get_constant(Constant::String(named_arg.name.clone()));
                             self.emit_u16(Opcode::PushConst, name_idx);
 
                             // Push the value
@@ -332,14 +359,19 @@ impl Compiler {
 
                         // Call capture/send with 2*N arguments (name-value pairs)
                         let func_name = if *is_send { "send" } else { "capture" };
-                        let idx = self.add_or_get_constant(Constant::FunctionName(func_name.to_string()));
+                        let idx =
+                            self.add_or_get_constant(Constant::FunctionName(func_name.to_string()));
 
                         let arg_count = entries.len() * 2;
                         if arg_count > 255 {
                             return Err(ParseError::at_span(
-                                format!("Too many arguments to {}: {} (max 255)", func_name, arg_count),
-                                *span
-                            ));
+                                format!(
+                                    "Too many arguments to {}: {} (max 255)",
+                                    func_name, arg_count
+                                ),
+                                *span,
+                            )
+                            .boxed());
                         }
                         self.emit_call(idx, arg_count as u8);
                     }
@@ -353,8 +385,9 @@ impl Compiler {
                 // Sample statements are handled at the probe level, not in the body
                 return Err(ParseError::at_span(
                     "Sample statements should be handled at probe level",
-                    *span
-                ));
+                    *span,
+                )
+                .boxed());
             }
         }
 
@@ -475,7 +508,10 @@ mod tests {
         compiler.emit(Opcode::Add);
         compiler.emit(Opcode::Mul);
 
-        assert_eq!(compiler.bytecode, vec![Opcode::Add as u8, Opcode::Mul as u8]);
+        assert_eq!(
+            compiler.bytecode,
+            vec![Opcode::Add as u8, Opcode::Mul as u8]
+        );
     }
 
     #[test]
@@ -484,11 +520,14 @@ mod tests {
 
         compiler.emit_u16(Opcode::PushConst, 0x1234);
 
-        assert_eq!(compiler.bytecode, vec![
-            Opcode::PushConst as u8,
-            0x34, // Little-endian low byte
-            0x12, // Little-endian high byte
-        ]);
+        assert_eq!(
+            compiler.bytecode,
+            vec![
+                Opcode::PushConst as u8,
+                0x34, // Little-endian low byte
+                0x12, // Little-endian high byte
+            ]
+        );
     }
 
     #[test]
@@ -497,11 +536,15 @@ mod tests {
 
         compiler.emit_call(0x0100, 3);
 
-        assert_eq!(compiler.bytecode, vec![
-            Opcode::CallFunc as u8,
-            0x00, 0x01, // Function index (little-endian)
-            3,          // Arg count
-        ]);
+        assert_eq!(
+            compiler.bytecode,
+            vec![
+                Opcode::CallFunc as u8,
+                0x00,
+                0x01, // Function index (little-endian)
+                3,    // Arg count
+            ]
+        );
     }
 
     #[test]
@@ -548,8 +591,8 @@ mod tests {
 
     // ===== Expression Compilation Tests =====
 
-    use super::super::lexer::Lexer;
     use super::super::Parser;
+    use super::super::lexer::Lexer;
 
     fn compile_expr_helper(source: &str) -> (Vec<u8>, ConstantPool) {
         let lexer = Lexer::new(source);
@@ -1053,7 +1096,10 @@ fn:myapp.test2:entry
         println!("Probe with predicate:");
         println!("  Predicate bytecode: {} bytes", probe.predicate.len());
         println!("  Body bytecode: {} bytes", probe.body.len());
-        println!("  Total probe bytecode: {} bytes", probe.predicate.len() + probe.body.len());
+        println!(
+            "  Total probe bytecode: {} bytes",
+            probe.predicate.len() + probe.body.len()
+        );
 
         // Predicate: LoadVar(arg0) [3], PushConst(10) [3], Gt [1] = 7 bytes
         assert_eq!(probe.predicate.len(), 7);
@@ -1084,7 +1130,10 @@ fn:myapp.test2:entry
 
         let probe = &program.probes[0];
 
-        println!("Complex predicate bytecode: {} bytes", probe.predicate.len());
+        println!(
+            "Complex predicate bytecode: {} bytes",
+            probe.predicate.len()
+        );
 
         // Predicate should be:
         // LoadVar(arg0) [3], PushConst(10) [3], Gt [1],
@@ -1172,7 +1221,10 @@ fn:myapp.test2:entry
         let probe = &program.probes[0];
         let bytecode = &probe.body;
 
-        println!("Arithmetic expression bytecode size: {} bytes", bytecode.len());
+        println!(
+            "Arithmetic expression bytecode size: {} bytes",
+            bytecode.len()
+        );
 
         // Expected: LoadVar($req) [3], LoadVar(arg0) [3], LoadVar(arg1) [3], Add [1], PushConst(2) [3], Mul [1], SetAttr(total) [3] = 17 bytes
         assert_eq!(bytecode.len(), 17);
@@ -1201,7 +1253,10 @@ fn:myapp.test2:entry
         let probe = &program.probes[0];
         let bytecode = &probe.body;
 
-        println!("Function call chain bytecode size: {} bytes", bytecode.len());
+        println!(
+            "Function call chain bytecode size: {} bytes",
+            bytecode.len()
+        );
 
         // Expected: LoadVar(args) [3], CallFunc(len, 1) [4], CallFunc(timestamp, 0) [4], CallFunc(capture, 2) [4], Pop [1] = 16 bytes
         assert_eq!(bytecode.len(), 16);
@@ -1261,7 +1316,10 @@ fn:myapp.test2:entry
         let probe = &program.probes[0];
         let bytecode = &probe.body;
 
-        println!("Multiple statements bytecode size: {} bytes", bytecode.len());
+        println!(
+            "Multiple statements bytecode size: {} bytes",
+            bytecode.len()
+        );
 
         // Statement 1: LoadVar($req) [3], CallFunc(timestamp, 0) [4], SetAttr(start) [3] = 10 bytes
         // Statement 2: LoadVar($req) [3], LoadVar(arg0) [3], SetAttr(user_id) [3] = 9 bytes
@@ -1286,7 +1344,10 @@ fn:myapp.test2:entry
 
         let probe = &program.probes[0];
 
-        println!("Comparison operators predicate: {} bytes", probe.predicate.len());
+        println!(
+            "Comparison operators predicate: {} bytes",
+            probe.predicate.len()
+        );
 
         // LoadVar(arg0) [3], PushConst(10) [3], Lt [1], LoadVar(arg0) [3], PushConst(100) [3], Ge [1], Or [1] = 15 bytes
         assert_eq!(probe.predicate.len(), 15);
@@ -1463,7 +1524,10 @@ fn:myapp.test2:entry
         println!("\n=== TYPICAL PROBE SIZE METRICS ===");
         println!("Predicate bytecode: {} bytes", probe.predicate.len());
         println!("Body bytecode: {} bytes", probe.body.len());
-        println!("Total bytecode: {} bytes", probe.predicate.len() + probe.body.len());
+        println!(
+            "Total bytecode: {} bytes",
+            probe.predicate.len() + probe.body.len()
+        );
         println!("Constant pool entries: {}", program.constant_pool.len());
 
         let proto_bytes = program.to_proto_bytes().unwrap();
@@ -1488,7 +1552,10 @@ fn:myapp.test2:entry
         let program = compiler.compile(ast).unwrap();
 
         println!("Deduplication test:");
-        println!("  5 uses of 'args', constant pool entries: {}", program.constant_pool.len());
+        println!(
+            "  5 uses of 'args', constant pool entries: {}",
+            program.constant_pool.len()
+        );
 
         // Should only have 2 constants: "args" and "capture"
         assert_eq!(program.constant_pool.len(), 2);
@@ -1587,7 +1654,10 @@ fn:app.c:entry
         assert_eq!(program.probes[1].id, "probe_1");
         assert_eq!(program.probes[2].id, "probe_2");
 
-        println!("Multiple probes constant pool: {} entries", program.constant_pool.len());
+        println!(
+            "Multiple probes constant pool: {} entries",
+            program.constant_pool.len()
+        );
         // Should deduplicate args and capture across all probes
         assert!(program.constant_pool.len() < 10);
     }

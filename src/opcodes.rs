@@ -2,7 +2,6 @@
 ///
 /// This is a stack-based VM with no control flow (no jumps, no conditionals).
 /// Execution proceeds linearly from start to end, with the final stack value as the result.
-
 /// Opcodes are single bytes (u8) for compact representation
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,24 +28,24 @@ pub enum Opcode {
     StoreVar = 0x11,
 
     // Arithmetic operators (binary, pop 2, push 1)
-    Add = 0x20,      // a + b
-    Sub = 0x21,      // a - b
-    Mul = 0x22,      // a * b
-    Div = 0x23,      // a / b
-    Mod = 0x24,      // a % b
+    Add = 0x20, // a + b
+    Sub = 0x21, // a - b
+    Mul = 0x22, // a * b
+    Div = 0x23, // a / b
+    Mod = 0x24, // a % b
 
     // Comparison operators (binary, pop 2, push 1 bool)
-    Eq = 0x30,       // a == b
-    Ne = 0x31,       // a != b
-    Lt = 0x32,       // a < b
-    Gt = 0x33,       // a > b
-    Le = 0x34,       // a <= b
-    Ge = 0x35,       // a >= b
+    Eq = 0x30, // a == b
+    Ne = 0x31, // a != b
+    Lt = 0x32, // a < b
+    Gt = 0x33, // a > b
+    Le = 0x34, // a <= b
+    Ge = 0x35, // a >= b
 
     // Logical operators
-    And = 0x40,      // a && b (binary, pop 2, push 1)
-    Or = 0x41,       // a || b (binary, pop 2, push 1)
-    Not = 0x42,      // !a (unary, pop 1, push 1)
+    And = 0x40, // a && b (binary, pop 2, push 1)
+    Or = 0x41,  // a || b (binary, pop 2, push 1)
+    Not = 0x42, // !a (unary, pop 1, push 1)
 
     // Field/attribute access
     /// Get attribute from object: obj.field
@@ -107,7 +106,11 @@ impl Opcode {
     pub fn operand_size(&self) -> usize {
         match self {
             // Opcodes with u16 operand (2 bytes)
-            Opcode::PushConst | Opcode::LoadVar | Opcode::StoreVar | Opcode::GetAttr | Opcode::SetAttr => 2,
+            Opcode::PushConst
+            | Opcode::LoadVar
+            | Opcode::StoreVar
+            | Opcode::GetAttr
+            | Opcode::SetAttr => 2,
 
             // CallFunc has u16 + u8 (3 bytes total)
             Opcode::CallFunc => 3,

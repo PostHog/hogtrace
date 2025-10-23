@@ -14,11 +14,19 @@ pub struct Position {
 
 impl Position {
     pub fn new(line: usize, column: usize, offset: usize) -> Self {
-        Position { line, column, offset }
+        Position {
+            line,
+            column,
+            offset,
+        }
     }
 
     pub fn start() -> Self {
-        Position { line: 1, column: 1, offset: 0 }
+        Position {
+            line: 1,
+            column: 1,
+            offset: 0,
+        }
     }
 }
 
@@ -41,14 +49,21 @@ impl Span {
     }
 
     pub fn single(pos: Position) -> Self {
-        Span { start: pos, end: pos }
+        Span {
+            start: pos,
+            end: pos,
+        }
     }
 }
 
 impl fmt::Display for Span {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.start.line == self.end.line {
-            write!(f, "{}:{}-{}", self.start.line, self.start.column, self.end.column)
+            write!(
+                f,
+                "{}:{}-{}",
+                self.start.line, self.start.column, self.end.column
+            )
         } else {
             write!(f, "{}-{}", self.start, self.end)
         }
@@ -69,57 +84,57 @@ pub enum TokenKind {
     Ident(String),
 
     // Keywords
-    Fn,        // fn
-    Py,        // py
-    Entry,     // entry
-    Exit,      // exit
-    Capture,   // capture
-    Send,      // send
-    Sample,    // sample
-    Req,       // $req
-    Request,   // $request
+    Fn,      // fn
+    Py,      // py
+    Entry,   // entry
+    Exit,    // exit
+    Capture, // capture
+    Send,    // send
+    Sample,  // sample
+    Req,     // $req
+    Request, // $request
 
     // Operators
-    Plus,      // +
-    Minus,     // -
-    Star,      // *
-    Slash,     // /
-    Percent,   // %
+    Plus,    // +
+    Minus,   // -
+    Star,    // *
+    Slash,   // /
+    Percent, // %
 
     // Comparison
-    Lt,        // <
-    Gt,        // >
-    LtEq,      // <=
-    GtEq,      // >=
-    EqEq,      // ==
-    NotEq,     // !=
+    Lt,    // <
+    Gt,    // >
+    LtEq,  // <=
+    GtEq,  // >=
+    EqEq,  // ==
+    NotEq, // !=
 
     // Logical
-    And,       // &&
-    Or,        // ||
-    Not,       // !
+    And, // &&
+    Or,  // ||
+    Not, // !
 
     // Assignment
-    Eq,        // =
+    Eq, // =
 
     // Delimiters
-    LParen,    // (
-    RParen,    // )
-    LBrace,    // {
-    RBrace,    // }
-    LBracket,  // [
-    RBracket,  // ]
+    LParen,   // (
+    RParen,   // )
+    LBrace,   // {
+    RBrace,   // }
+    LBracket, // [
+    RBracket, // ]
 
     // Punctuation
-    Colon,     // :
-    Semi,      // ;
-    Comma,     // ,
-    Dot,       // .
-    Dollar,    // $
+    Colon,  // :
+    Semi,   // ;
+    Comma,  // ,
+    Dot,    // .
+    Dollar, // $
 
     // Special
-    FSlash,    // / (used in predicates /expr/)
-    Wildcard,  // * (when used as wildcard in module paths)
+    FSlash,   // / (used in predicates /expr/)
+    Wildcard, // * (when used as wildcard in module paths)
 
     // End of file
     Eof,
@@ -323,7 +338,7 @@ impl<'a> Lexer<'a> {
                     self.advance();
                     self.make_token(TokenKind::Ident(ch.to_string()))
                 }
-            }
+            },
         }
     }
 

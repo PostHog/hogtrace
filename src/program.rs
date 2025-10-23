@@ -172,9 +172,7 @@ impl Program {
 impl Probe {
     /// Convert from protobuf Probe message
     pub fn from_proto(proto: proto::Probe) -> Result<Self, String> {
-        let spec = proto
-            .spec
-            .ok_or("Probe missing spec")?;
+        let spec = proto.spec.ok_or("Probe missing spec")?;
         let spec = ProbeSpec::from_proto(spec)?;
 
         Ok(Probe {

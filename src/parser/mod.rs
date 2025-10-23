@@ -3,18 +3,18 @@
 //! This module provides a complete parser for the HogTrace language, converting
 //! source text into an AST and then compiling it to VM bytecode.
 
-pub mod lexer;
 pub mod ast;
-pub mod error;
 pub mod compiler;
+pub mod error;
+pub mod lexer;
 
 #[cfg(test)]
 mod tests;
 
-pub use lexer::{Lexer, Token, TokenKind, Span};
 pub use ast::*;
-pub use error::{ParseError, ParseResult, ErrorKind};
 pub use compiler::Compiler;
+pub use error::{ErrorKind, ParseError, ParseResult};
+pub use lexer::{Lexer, Span, Token, TokenKind};
 
 use crate::Program;
 
@@ -118,14 +118,16 @@ impl<'a> Parser<'a> {
                 Provider::Py
             }
             _ => {
-                return Err(self.enrich_error(
-                    ParseError::with_kind(
-                        ErrorKind::InvalidProbeSpec,
-                        "Expected 'fn' or 'py' at start of probe specification",
-                        self.current.span,
+                return Err(self
+                    .enrich_error(
+                        ParseError::with_kind(
+                            ErrorKind::InvalidProbeSpec,
+                            "Expected 'fn' or 'py' at start of probe specification",
+                            self.current.span,
+                        )
+                        .with_suggestion("Probe specifications must start with 'fn:' or 'py:'"),
                     )
-                    .with_suggestion("Probe specifications must start with 'fn:' or 'py:'")
-                ))
+                    .boxed());
             }
         };
 
@@ -168,7 +170,8 @@ impl<'a> Parser<'a> {
                     return Err(ParseError::at_span(
                         "Expected identifier or '*'",
                         self.current.span,
-                    ))
+                    )
+                    .boxed());
                 }
             }
 
@@ -179,10 +182,9 @@ impl<'a> Parser<'a> {
         }
 
         if parts.is_empty() {
-            return Err(ParseError::at_span(
-                "Expected module/function path",
-                self.current.span,
-            ));
+            return Err(
+                ParseError::at_span("Expected module/function path", self.current.span).boxed(),
+            );
         }
 
         Ok(ModuleFunction {
@@ -204,10 +206,10 @@ impl<'a> Parser<'a> {
                         self.advance();
                         Ok(ProbePoint::EntryOffset(offset))
                     } else {
-                        Err(ParseError::at_span(
-                            "Expected integer offset",
-                            self.current.span,
-                        ))
+                        Err(
+                            ParseError::at_span("Expected integer offset", self.current.span)
+                                .boxed(),
+                        )
                     }
                 } else {
                     Ok(ProbePoint::Entry)
@@ -223,10 +225,10 @@ impl<'a> Parser<'a> {
                         self.advance();
                         Ok(ProbePoint::ExitOffset(offset))
                     } else {
-                        Err(ParseError::at_span(
-                            "Expected integer offset",
-                            self.current.span,
-                        ))
+                        Err(
+                            ParseError::at_span("Expected integer offset", self.current.span)
+                                .boxed(),
+                        )
                     }
                 } else {
                     Ok(ProbePoint::Exit)
@@ -238,20 +240,25 @@ impl<'a> Parser<'a> {
                     match s.as_str() {
                         "entr" | "entyr" | "entre" => Some("Did you mean 'entry'?".to_string()),
                         "exi" | "ext" | "exti" => Some("Did you mean 'exit'?".to_string()),
-                        _ => Some("Probe points must be 'entry', 'exit', 'entry+N', or 'exit+N'".to_string()),
+                        _ => Some(
+                            "Probe points must be 'entry', 'exit', 'entry+N', or 'exit+N'"
+                                .to_string(),
+                        ),
                     }
                 } else {
                     Some("Probe points must be 'entry', 'exit', 'entry+N', or 'exit+N'".to_string())
                 };
 
-                Err(self.enrich_error(
-                    ParseError::with_kind(
-                        ErrorKind::InvalidProbeSpec,
-                        format!("Expected 'entry' or 'exit', found {}", self.current.kind),
-                        self.current.span,
+                Err(self
+                    .enrich_error(
+                        ParseError::with_kind(
+                            ErrorKind::InvalidProbeSpec,
+                            format!("Expected 'entry' or 'exit', found {}", self.current.kind),
+                            self.current.span,
+                        )
+                        .with_suggestion(suggestion.unwrap()),
                     )
-                    .with_suggestion(suggestion.unwrap())
-                ))
+                    .boxed())
             }
         }
     }
@@ -285,7 +292,11 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse predicate expression with precedence, tracking delimiter depth
-    fn parse_predicate_expr_with_precedence(&mut self, min_precedence: u8, depth: usize) -> ParseResult<AstExpr> {
+    fn parse_predicate_expr_with_precedence(
+        &mut self,
+        min_precedence: u8,
+        depth: usize,
+    ) -> ParseResult<AstExpr> {
         let mut left = self.parse_unary_expr_for_predicate(depth)?;
         left = self.parse_postfix_expr_for_predicate(left, depth)?;
 
@@ -331,7 +342,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_postfix_expr_for_predicate(&mut self, mut expr: AstExpr, depth: usize) -> ParseResult<AstExpr> {
+    fn parse_postfix_expr_for_predicate(
+        &mut self,
+        mut expr: AstExpr,
+        depth: usize,
+    ) -> ParseResult<AstExpr> {
         loop {
             match &self.current.kind {
                 TokenKind::Dot => {
@@ -343,7 +358,8 @@ impl<'a> Parser<'a> {
                         return Err(ParseError::at_span(
                             "Expected field name after '.'",
                             field_tok.span,
-                        ));
+                        )
+                        .boxed());
                     };
                     let span = Span::new(expr.span().start, field_tok.span.end);
                     expr = AstExpr::FieldAccess {
@@ -392,7 +408,8 @@ impl<'a> Parser<'a> {
             _ => Err(ParseError::at_span(
                 format!("Expected statement, found {}", self.current.kind),
                 self.current.span,
-            )),
+            )
+            .boxed()),
         }
     }
 
@@ -407,10 +424,7 @@ impl<'a> Parser<'a> {
         let field = if let TokenKind::Ident(s) = field_tok.kind {
             s
         } else {
-            return Err(ParseError::at_span(
-                "Expected field name",
-                field_tok.span,
-            ));
+            return Err(ParseError::at_span("Expected field name", field_tok.span).boxed());
         };
 
         let var_span = Span::new(start, field_tok.span.end);
@@ -441,7 +455,7 @@ impl<'a> Parser<'a> {
             self.advance();
             num
         } else {
-            return Err(ParseError::at_span("Expected integer", self.current.span));
+            return Err(ParseError::at_span("Expected integer", self.current.span).boxed());
         };
 
         let spec = if self.check(&TokenKind::Percent) {
@@ -454,14 +468,18 @@ impl<'a> Parser<'a> {
                 self.advance();
                 num
             } else {
-                return Err(ParseError::at_span("Expected integer", self.current.span));
+                return Err(ParseError::at_span("Expected integer", self.current.span).boxed());
             };
-            SampleSpec::Ratio { numerator, denominator }
+            SampleSpec::Ratio {
+                numerator,
+                denominator,
+            }
         } else {
             return Err(ParseError::at_span(
                 "Expected '%' or '/' after sample number",
                 self.current.span,
-            ));
+            )
+            .boxed());
         };
 
         let semi = self.expect(TokenKind::Semi)?;
@@ -500,11 +518,11 @@ impl<'a> Parser<'a> {
     /// Parse capture arguments (named or positional)
     fn parse_capture_args(&mut self) -> ParseResult<CaptureArgs> {
         // Check if first argument is named (ident=expr)
-        if let TokenKind::Ident(_) = &self.current.kind {
-            if let TokenKind::Eq = &self.peek.kind {
-                // Named arguments
-                return self.parse_named_capture_args();
-            }
+        if let TokenKind::Ident(_) = &self.current.kind
+            && let TokenKind::Eq = &self.peek.kind
+        {
+            // Named arguments
+            return self.parse_named_capture_args();
         }
 
         // Positional arguments
@@ -528,7 +546,7 @@ impl<'a> Parser<'a> {
             let name = if let TokenKind::Ident(s) = name_tok.kind {
                 s
             } else {
-                return Err(ParseError::at_span("Expected identifier", name_tok.span));
+                return Err(ParseError::at_span("Expected identifier", name_tok.span).boxed());
             };
 
             self.expect(TokenKind::Eq)?;
@@ -639,9 +657,7 @@ impl<'a> Parser<'a> {
             }
 
             // Request variables ($req.field or $request.field)
-            TokenKind::Req | TokenKind::Request => {
-                self.parse_request_var_expr()
-            }
+            TokenKind::Req | TokenKind::Request => self.parse_request_var_expr(),
 
             // Identifiers (could be variable or function call)
             TokenKind::Ident(_) => {
@@ -675,7 +691,8 @@ impl<'a> Parser<'a> {
             _ => Err(ParseError::at_span(
                 format!("Expected expression, found {}", tok.kind),
                 tok.span,
-            )),
+            )
+            .boxed()),
         }
     }
 
@@ -693,7 +710,8 @@ impl<'a> Parser<'a> {
                         return Err(ParseError::at_span(
                             "Expected field name after '.'",
                             field_tok.span,
-                        ));
+                        )
+                        .boxed());
                     };
                     let span = Span::new(expr.span().start, field_tok.span.end);
                     expr = AstExpr::FieldAccess {
@@ -736,7 +754,8 @@ impl<'a> Parser<'a> {
             return Err(ParseError::at_span(
                 "Expected field name after $req. or $request.",
                 field_tok.span,
-            ));
+            )
+            .boxed());
         };
 
         let span = Span::new(start, field_tok.span.end);
@@ -746,10 +765,7 @@ impl<'a> Parser<'a> {
             span,
         };
 
-        Ok(AstExpr::RequestVar {
-            var,
-            span,
-        })
+        Ok(AstExpr::RequestVar { var, span })
     }
 
     /// Parse function call (name already consumed)
@@ -825,7 +841,7 @@ impl<'a> Parser<'a> {
             self.advance();
             Ok(tok)
         } else {
-            Err(ParseError::expected(kind, self.current.clone()))
+            Err(ParseError::expected(kind, self.current.clone()).boxed())
         }
     }
 }

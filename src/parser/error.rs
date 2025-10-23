@@ -1,10 +1,10 @@
 //! Error types for the parser
 
-use super::lexer::{Token, TokenKind, Span, Position};
+use super::lexer::{Span, Token, TokenKind};
 use std::fmt;
 
 /// Result type for parser operations
-pub type ParseResult<T> = Result<T, ParseError>;
+pub type ParseResult<T> = Result<T, Box<ParseError>>;
 
 /// Error severity level
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,13 +105,26 @@ impl ParseError {
         self
     }
 
+    /// Convert into a boxed error for ParseResult
+    pub fn boxed(self) -> Box<Self> {
+        Box::new(self)
+    }
+
     /// Suggest fixes for common "expected token" errors
     fn suggest_for_expected(expected: &TokenKind, found: &TokenKind) -> Option<String> {
         match (expected, found) {
-            (TokenKind::Semi, _) => Some("Add a semicolon ';' at the end of the statement".to_string()),
-            (TokenKind::RBrace, TokenKind::Eof) => Some("Add a closing brace '}' to match the opening brace".to_string()),
-            (TokenKind::RParen, TokenKind::Eof) => Some("Add a closing parenthesis ')' to match the opening parenthesis".to_string()),
-            (TokenKind::RBracket, TokenKind::Eof) => Some("Add a closing bracket ']' to match the opening bracket".to_string()),
+            (TokenKind::Semi, _) => {
+                Some("Add a semicolon ';' at the end of the statement".to_string())
+            }
+            (TokenKind::RBrace, TokenKind::Eof) => {
+                Some("Add a closing brace '}' to match the opening brace".to_string())
+            }
+            (TokenKind::RParen, TokenKind::Eof) => {
+                Some("Add a closing parenthesis ')' to match the opening parenthesis".to_string())
+            }
+            (TokenKind::RBracket, TokenKind::Eof) => {
+                Some("Add a closing bracket ']' to match the opening bracket".to_string())
+            }
             _ => Option::None,
         }
     }
@@ -121,7 +134,8 @@ impl ParseError {
         let mut output = String::new();
 
         // Error header
-        output.push_str(&format!("{}: {}\n",
+        output.push_str(&format!(
+            "{}: {}\n",
             match self.level {
                 ErrorLevel::Error => "Error",
                 ErrorLevel::Warning => "Warning",
@@ -130,10 +144,9 @@ impl ParseError {
         ));
 
         // Location
-        output.push_str(&format!("  --> {}:{}:{}\n",
-            filename,
-            self.span.start.line,
-            self.span.start.column
+        output.push_str(&format!(
+            "  --> {}:{}:{}\n",
+            filename, self.span.start.line, self.span.start.column
         ));
 
         // Source code snippet if available
@@ -158,8 +171,11 @@ impl ParseError {
                 };
 
                 let indicator_len = (end_col.saturating_sub(start_col)).max(1);
-                output.push_str(&format!("{:width$} | {:>start$}{:^<len$}\n",
-                    "", "", "",
+                output.push_str(&format!(
+                    "{:width$} | {:>start$}{:^<len$}\n",
+                    "",
+                    "",
+                    "",
                     width = line_num_width,
                     start = start_col + 1,
                     len = indicator_len
@@ -208,8 +224,7 @@ mod tests {
     fn test_error_with_source() {
         let span = Span::new(Position::new(1, 5, 4), Position::new(1, 10, 9));
         let source = "fn:myapp.test:entry";
-        let err = ParseError::at_span("Test error", span)
-            .with_source(source);
+        let err = ParseError::at_span("Test error", span).with_source(source);
 
         assert!(err.source.is_some());
         assert_eq!(err.source.unwrap(), source);
@@ -221,7 +236,7 @@ mod tests {
         let err = ParseError::with_kind(
             ErrorKind::InvalidProbeSpec,
             "Invalid probe specification",
-            span
+            span,
         );
 
         assert_eq!(err.kind, ErrorKind::InvalidProbeSpec);
@@ -232,13 +247,9 @@ mod tests {
     #[test]
     fn test_error_chaining() {
         let span = Span::new(Position::new(1, 1, 0), Position::new(1, 5, 4));
-        let err = ParseError::with_kind(
-            ErrorKind::InvalidExpression,
-            "Invalid expression",
-            span
-        )
-        .with_suggestion("Check your syntax")
-        .with_source("test + ");
+        let err = ParseError::with_kind(ErrorKind::InvalidExpression, "Invalid expression", span)
+            .with_suggestion("Check your syntax")
+            .with_source("test + ");
 
         assert_eq!(err.kind, ErrorKind::InvalidExpression);
         assert_eq!(err.suggestion, Some("Check your syntax".to_string()));
@@ -249,8 +260,10 @@ mod tests {
 
     #[test]
     fn test_expected_token_error() {
-        let token = Token::new(TokenKind::Ident("test".to_string()),
-            Span::new(Position::new(1, 1, 0), Position::new(1, 5, 4)));
+        let token = Token::new(
+            TokenKind::Ident("test".to_string()),
+            Span::new(Position::new(1, 1, 0), Position::new(1, 5, 4)),
+        );
         let err = ParseError::expected(TokenKind::Semi, token);
 
         assert_eq!(err.kind, ErrorKind::UnexpectedToken);
@@ -260,8 +273,10 @@ mod tests {
 
     #[test]
     fn test_expected_semicolon_suggestion() {
-        let token = Token::new(TokenKind::RBrace,
-            Span::new(Position::new(3, 1, 50), Position::new(3, 2, 51)));
+        let token = Token::new(
+            TokenKind::RBrace,
+            Span::new(Position::new(3, 1, 50), Position::new(3, 2, 51)),
+        );
         let err = ParseError::expected(TokenKind::Semi, token);
 
         assert!(err.suggestion.is_some());
@@ -270,8 +285,10 @@ mod tests {
 
     #[test]
     fn test_expected_rbrace_eof() {
-        let token = Token::new(TokenKind::Eof,
-            Span::new(Position::new(10, 1, 200), Position::new(10, 1, 200)));
+        let token = Token::new(
+            TokenKind::Eof,
+            Span::new(Position::new(10, 1, 200), Position::new(10, 1, 200)),
+        );
         let err = ParseError::expected(TokenKind::RBrace, token);
 
         assert_eq!(err.kind, ErrorKind::UnexpectedEof);
@@ -281,8 +298,10 @@ mod tests {
 
     #[test]
     fn test_expected_rparen_eof() {
-        let token = Token::new(TokenKind::Eof,
-            Span::new(Position::new(5, 20, 100), Position::new(5, 20, 100)));
+        let token = Token::new(
+            TokenKind::Eof,
+            Span::new(Position::new(5, 20, 100), Position::new(5, 20, 100)),
+        );
         let err = ParseError::expected(TokenKind::RParen, token);
 
         assert_eq!(err.kind, ErrorKind::UnexpectedEof);
@@ -292,8 +311,10 @@ mod tests {
 
     #[test]
     fn test_expected_rbracket_eof() {
-        let token = Token::new(TokenKind::Eof,
-            Span::new(Position::new(7, 15, 150), Position::new(7, 15, 150)));
+        let token = Token::new(
+            TokenKind::Eof,
+            Span::new(Position::new(7, 15, 150), Position::new(7, 15, 150)),
+        );
         let err = ParseError::expected(TokenKind::RBracket, token);
 
         assert_eq!(err.kind, ErrorKind::UnexpectedEof);
@@ -303,8 +324,10 @@ mod tests {
 
     #[test]
     fn test_expected_no_suggestion() {
-        let token = Token::new(TokenKind::Plus,
-            Span::new(Position::new(2, 10, 30), Position::new(2, 11, 31)));
+        let token = Token::new(
+            TokenKind::Plus,
+            Span::new(Position::new(2, 10, 30), Position::new(2, 11, 31)),
+        );
         let err = ParseError::expected(TokenKind::Ident("test".to_string()), token);
 
         // Should have no suggestion for this case
@@ -333,13 +356,9 @@ mod tests {
         let source = "fn:myapp.test:entr";
         let span = Span::new(Position::new(1, 15, 14), Position::new(1, 19, 18));
 
-        let err = ParseError::with_kind(
-            ErrorKind::InvalidProbeSpec,
-            "Invalid probe point",
-            span
-        )
-        .with_source(source)
-        .with_suggestion("Did you mean 'entry'?");
+        let err = ParseError::with_kind(ErrorKind::InvalidProbeSpec, "Invalid probe point", span)
+            .with_source(source)
+            .with_suggestion("Did you mean 'entry'?");
 
         let formatted = err.format_with_source("typo.hogtrace");
         assert!(formatted.contains("Error: Invalid probe point"));
@@ -380,8 +399,7 @@ mod tests {
         let source = "fn:myapp.test:entry";
         let span = Span::new(Position::new(1, 4, 3), Position::new(1, 9, 8));
 
-        let err = ParseError::at_span("Test error", span)
-            .with_source(source);
+        let err = ParseError::at_span("Test error", span).with_source(source);
 
         let formatted = err.format_with_source("test.hogtrace");
         // Should contain line number and source
@@ -392,11 +410,11 @@ mod tests {
 
     #[test]
     fn test_error_format_line_number_padding() {
-        let source = "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nline11";
+        let source =
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nline11";
         let span = Span::new(Position::new(11, 1, 60), Position::new(11, 7, 66));
 
-        let err = ParseError::at_span("Error on line 11", span)
-            .with_source(source);
+        let err = ParseError::at_span("Error on line 11", span).with_source(source);
 
         let formatted = err.format_with_source("test.hogtrace");
         // Line number should be properly padded (2 digits)
@@ -406,8 +424,7 @@ mod tests {
     #[test]
     fn test_error_display_trait() {
         let span = Span::new(Position::new(2, 5, 15), Position::new(2, 10, 20));
-        let err = ParseError::at_span("Test error message", span)
-            .with_suggestion("Try this fix");
+        let err = ParseError::at_span("Test error message", span).with_suggestion("Try this fix");
 
         let display_output = format!("{}", err);
         assert!(display_output.contains("Parse error at"));
@@ -476,8 +493,7 @@ mod tests {
         let source = "invalid";
         let span = Span::new(Position::new(1, 1, 0), Position::new(1, 8, 7));
 
-        let err = ParseError::at_span("Invalid probe spec", span)
-            .with_source(source);
+        let err = ParseError::at_span("Invalid probe spec", span).with_source(source);
 
         let formatted = err.format_with_source("test.hogtrace");
         assert!(formatted.contains("test.hogtrace:1:1"));
@@ -488,8 +504,7 @@ mod tests {
         let source = "fn:myapp.test:entry\n{\n    capture(x)\n}";
         let span = Span::new(Position::new(4, 1, 38), Position::new(4, 2, 39));
 
-        let err = ParseError::at_span("Unexpected end of input", span)
-            .with_source(source);
+        let err = ParseError::at_span("Unexpected end of input", span).with_source(source);
 
         let formatted = err.format_with_source("test.hogtrace");
         assert!(formatted.contains("test.hogtrace:4:1"));
@@ -500,8 +515,7 @@ mod tests {
         let source = "fn:myapp.verylongfunction:entry";
         let span = Span::new(Position::new(1, 9, 8), Position::new(1, 26, 25));
 
-        let err = ParseError::at_span("Invalid function name", span)
-            .with_source(source);
+        let err = ParseError::at_span("Invalid function name", span).with_source(source);
 
         let formatted = err.format_with_source("test.hogtrace");
         assert!(formatted.contains("1 | fn:myapp.verylongfunction:entry"));
@@ -512,8 +526,7 @@ mod tests {
         let source = "";
         let span = Span::new(Position::new(1, 1, 0), Position::new(1, 1, 0));
 
-        let err = ParseError::at_span("Empty file", span)
-            .with_source(source);
+        let err = ParseError::at_span("Empty file", span).with_source(source);
 
         let formatted = err.format_with_source("empty.hogtrace");
         assert!(formatted.contains("Error: Empty file"));
@@ -526,8 +539,7 @@ mod tests {
         // Span from line 3 to line 5
         let span = Span::new(Position::new(3, 5, 25), Position::new(5, 5, 50));
 
-        let err = ParseError::at_span("Multi-line error", span)
-            .with_source(source);
+        let err = ParseError::at_span("Multi-line error", span).with_source(source);
 
         let formatted = err.format_with_source("test.hogtrace");
         assert!(formatted.contains("test.hogtrace:3:5"));
@@ -538,8 +550,7 @@ mod tests {
     #[test]
     fn test_clone_error() {
         let span = Span::new(Position::new(1, 5, 4), Position::new(1, 10, 9));
-        let err1 = ParseError::at_span("Test error", span)
-            .with_suggestion("Fix it");
+        let err1 = ParseError::at_span("Test error", span).with_suggestion("Fix it");
 
         let err2 = err1.clone();
         assert_eq!(err1.message, err2.message);

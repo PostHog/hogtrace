@@ -257,7 +257,7 @@ pub fn comparison_op_default(
                 left.type_name(),
                 right.type_name(),
                 op
-            ))
+            ));
         }
     };
 

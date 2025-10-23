@@ -93,7 +93,12 @@ mod integration_tests {
             fn get_attribute(&mut self, _obj: &Value, _attr: &str) -> Result<Value, String> {
                 Err("Not implemented".to_string())
             }
-            fn set_attribute(&mut self, _obj: &Value, _attr: &str, _value: Value) -> Result<(), String> {
+            fn set_attribute(
+                &mut self,
+                _obj: &Value,
+                _attr: &str,
+                _value: Value,
+            ) -> Result<(), String> {
                 Err("Not implemented".to_string())
             }
             fn get_item(&mut self, _obj: &Value, _key: &Value) -> Result<Value, String> {

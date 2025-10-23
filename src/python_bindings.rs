@@ -2,13 +2,13 @@
 //!
 //! This module exposes the Rust VM to Python using PyO3.
 
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyFrame};
-use pyo3::exceptions::{PyValueError, PyRuntimeError};
 
-use crate::parser;
-use crate::program::{Program, Probe, ProbeSpec, FnTarget};
 use crate::executor::Executor;
+use crate::parser;
+use crate::program::{FnTarget, Probe, ProbeSpec, Program};
 use crate::python_dispatcher::PythonDispatcher;
 
 /// Compile HogTrace source code into a Program with bytecode
@@ -297,7 +297,11 @@ impl PyProbeExecutor {
     ///     store: RequestLocalStore for cross-probe variables
     #[new]
     fn new(program: PyProgram, probe: PyProbe, store: Py<PyAny>) -> Self {
-        PyProbeExecutor { program, probe, store }
+        PyProbeExecutor {
+            program,
+            probe,
+            store,
+        }
     }
 
     /// Execute the probe against a Python frame
@@ -318,7 +322,15 @@ impl PyProbeExecutor {
         exception: Option<Bound<'py, PyAny>>,
     ) -> PyResult<Option<Bound<'py, PyDict>>> {
         let store_bound = self.store.bind(py).clone();
-        execute_probe(py, &self.program, &self.probe, frame, store_bound, retval, exception)
+        execute_probe(
+            py,
+            &self.program,
+            &self.probe,
+            frame,
+            store_bound,
+            retval,
+            exception,
+        )
     }
 
     fn __repr__(&self) -> String {

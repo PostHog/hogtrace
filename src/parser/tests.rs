@@ -108,7 +108,9 @@ fn test_parse_request_var() {
 fn test_parse_binary_add() {
     let expr = parse_expr("1 + 2").unwrap();
     match expr {
-        AstExpr::Binary { op, left, right, .. } => {
+        AstExpr::Binary {
+            op, left, right, ..
+        } => {
             assert_eq!(op, BinaryOp::Add);
             match (*left, *right) {
                 (AstExpr::Int { value: 1, .. }, AstExpr::Int { value: 2, .. }) => (),
@@ -123,7 +125,9 @@ fn test_parse_binary_add() {
 fn test_parse_binary_subtract() {
     let expr = parse_expr("10 - 5").unwrap();
     match expr {
-        AstExpr::Binary { op, left, right, .. } => {
+        AstExpr::Binary {
+            op, left, right, ..
+        } => {
             assert_eq!(op, BinaryOp::Sub);
             match (*left, *right) {
                 (AstExpr::Int { value: 10, .. }, AstExpr::Int { value: 5, .. }) => (),
@@ -282,14 +286,12 @@ fn test_parse_chained_field_access() {
 fn test_parse_index_access() {
     let expr = parse_expr("arr[0]").unwrap();
     match expr {
-        AstExpr::IndexAccess { object, index, .. } => {
-            match (*object, *index) {
-                (AstExpr::Ident { name, .. }, AstExpr::Int { value: 0, .. }) => {
-                    assert_eq!(name, "arr");
-                }
-                _ => panic!("Expected Ident and Int(0)"),
+        AstExpr::IndexAccess { object, index, .. } => match (*object, *index) {
+            (AstExpr::Ident { name, .. }, AstExpr::Int { value: 0, .. }) => {
+                assert_eq!(name, "arr");
             }
-        }
+            _ => panic!("Expected Ident and Int(0)"),
+        },
         _ => panic!("Expected IndexAccess"),
     }
 }
@@ -298,14 +300,12 @@ fn test_parse_index_access() {
 fn test_parse_index_access_with_string_key() {
     let expr = parse_expr("obj[\"key\"]").unwrap();
     match expr {
-        AstExpr::IndexAccess { object, index, .. } => {
-            match (*object, *index) {
-                (AstExpr::Ident { .. }, AstExpr::String { value, .. }) => {
-                    assert_eq!(value, "key");
-                }
-                _ => panic!("Expected Ident and String"),
+        AstExpr::IndexAccess { object, index, .. } => match (*object, *index) {
+            (AstExpr::Ident { .. }, AstExpr::String { value, .. }) => {
+                assert_eq!(value, "key");
             }
-        }
+            _ => panic!("Expected Ident and String"),
+        },
         _ => panic!("Expected IndexAccess"),
     }
 }
@@ -360,10 +360,17 @@ fn test_operator_precedence_mul_add() {
     // 2 + 3 * 4 should parse as 2 + (3 * 4)
     let expr = parse_expr("2 + 3 * 4").unwrap();
     match expr {
-        AstExpr::Binary { op, left, right, .. } => {
+        AstExpr::Binary {
+            op, left, right, ..
+        } => {
             assert_eq!(op, BinaryOp::Add);
             match (*left, *right) {
-                (AstExpr::Int { value: 2, .. }, AstExpr::Binary { op: BinaryOp::Mul, .. }) => (),
+                (
+                    AstExpr::Int { value: 2, .. },
+                    AstExpr::Binary {
+                        op: BinaryOp::Mul, ..
+                    },
+                ) => (),
                 _ => panic!("Wrong precedence"),
             }
         }
@@ -376,10 +383,17 @@ fn test_operator_precedence_add_mul() {
     // 2 * 3 + 4 should parse as (2 * 3) + 4
     let expr = parse_expr("2 * 3 + 4").unwrap();
     match expr {
-        AstExpr::Binary { op, left, right, .. } => {
+        AstExpr::Binary {
+            op, left, right, ..
+        } => {
             assert_eq!(op, BinaryOp::Add);
             match (*left, *right) {
-                (AstExpr::Binary { op: BinaryOp::Mul, .. }, AstExpr::Int { value: 4, .. }) => (),
+                (
+                    AstExpr::Binary {
+                        op: BinaryOp::Mul, ..
+                    },
+                    AstExpr::Int { value: 4, .. },
+                ) => (),
                 _ => panic!("Wrong precedence"),
             }
         }
@@ -392,10 +406,19 @@ fn test_operator_precedence_comparison_and() {
     // x > 10 && y < 5 should parse as (x > 10) && (y < 5)
     let expr = parse_expr("x > 10 && y < 5").unwrap();
     match expr {
-        AstExpr::Binary { op, left, right, .. } => {
+        AstExpr::Binary {
+            op, left, right, ..
+        } => {
             assert_eq!(op, BinaryOp::And);
             match (*left, *right) {
-                (AstExpr::Binary { op: BinaryOp::Gt, .. }, AstExpr::Binary { op: BinaryOp::Lt, .. }) => (),
+                (
+                    AstExpr::Binary {
+                        op: BinaryOp::Gt, ..
+                    },
+                    AstExpr::Binary {
+                        op: BinaryOp::Lt, ..
+                    },
+                ) => (),
                 _ => panic!("Wrong precedence"),
             }
         }
@@ -408,10 +431,14 @@ fn test_operator_precedence_and_or() {
     // a || b && c should parse as a || (b && c)
     let expr = parse_expr("a || b && c").unwrap();
     match expr {
-        AstExpr::Binary { op, left, right, .. } => {
+        AstExpr::Binary {
+            op, left, right, ..
+        } => {
             assert_eq!(op, BinaryOp::Or);
             match *right {
-                AstExpr::Binary { op: BinaryOp::And, .. } => (),
+                AstExpr::Binary {
+                    op: BinaryOp::And, ..
+                } => (),
                 _ => panic!("Wrong precedence"),
             }
         }
@@ -424,7 +451,9 @@ fn test_complex_expression_from_corpus() {
     // From 02_predicate.hogtrace: arg0 > 10
     let expr = parse_expr("arg0 > 10").unwrap();
     match expr {
-        AstExpr::Binary { op: BinaryOp::Gt, .. } => (),
+        AstExpr::Binary {
+            op: BinaryOp::Gt, ..
+        } => (),
         _ => panic!("Expected Binary Gt"),
     }
 }
@@ -434,7 +463,9 @@ fn test_complex_expression_from_corpus_2() {
     // From 05_complex.hogtrace: len(args) > 2 && arg0.data[0]["value"] >= 100
     let expr = parse_expr("len(args) > 2 && arg0.data[0][\"value\"] >= 100").unwrap();
     match expr {
-        AstExpr::Binary { op: BinaryOp::And, .. } => (),
+        AstExpr::Binary {
+            op: BinaryOp::And, ..
+        } => (),
         _ => panic!("Expected Binary And"),
     }
 }
@@ -510,12 +541,10 @@ fn test_parse_assignment_with_expression() {
 fn test_parse_sample_percentage() {
     let stmt = parse_stmt("sample 10%;").unwrap();
     match stmt {
-        AstStatement::Sample { spec, .. } => {
-            match spec {
-                SampleSpec::Percentage(n) => assert_eq!(n, 10),
-                _ => panic!("Expected Percentage"),
-            }
-        }
+        AstStatement::Sample { spec, .. } => match spec {
+            SampleSpec::Percentage(n) => assert_eq!(n, 10),
+            _ => panic!("Expected Percentage"),
+        },
         _ => panic!("Expected Sample"),
     }
 }
@@ -524,15 +553,16 @@ fn test_parse_sample_percentage() {
 fn test_parse_sample_ratio() {
     let stmt = parse_stmt("sample 1/100;").unwrap();
     match stmt {
-        AstStatement::Sample { spec, .. } => {
-            match spec {
-                SampleSpec::Ratio { numerator, denominator } => {
-                    assert_eq!(numerator, 1);
-                    assert_eq!(denominator, 100);
-                }
-                _ => panic!("Expected Ratio"),
+        AstStatement::Sample { spec, .. } => match spec {
+            SampleSpec::Ratio {
+                numerator,
+                denominator,
+            } => {
+                assert_eq!(numerator, 1);
+                assert_eq!(denominator, 100);
             }
-        }
+            _ => panic!("Expected Ratio"),
+        },
         _ => panic!("Expected Sample"),
     }
 }
@@ -571,18 +601,16 @@ fn test_parse_send_no_args() {
 fn test_parse_capture_positional_single() {
     let stmt = parse_stmt("capture(args);").unwrap();
     match stmt {
-        AstStatement::Capture { args, .. } => {
-            match args {
-                CaptureArgs::Positional(args) => {
-                    assert_eq!(args.len(), 1);
-                    match &args[0] {
-                        AstExpr::Ident { name, .. } => assert_eq!(name, "args"),
-                        _ => panic!("Expected Ident"),
-                    }
+        AstStatement::Capture { args, .. } => match args {
+            CaptureArgs::Positional(args) => {
+                assert_eq!(args.len(), 1);
+                match &args[0] {
+                    AstExpr::Ident { name, .. } => assert_eq!(name, "args"),
+                    _ => panic!("Expected Ident"),
                 }
-                _ => panic!("Expected Positional"),
             }
-        }
+            _ => panic!("Expected Positional"),
+        },
         _ => panic!("Expected Capture"),
     }
 }
@@ -591,12 +619,10 @@ fn test_parse_capture_positional_single() {
 fn test_parse_capture_positional_multiple() {
     let stmt = parse_stmt("capture(arg0, arg1, arg2);").unwrap();
     match stmt {
-        AstStatement::Capture { args, .. } => {
-            match args {
-                CaptureArgs::Positional(args) => assert_eq!(args.len(), 3),
-                _ => panic!("Expected Positional"),
-            }
-        }
+        AstStatement::Capture { args, .. } => match args {
+            CaptureArgs::Positional(args) => assert_eq!(args.len(), 3),
+            _ => panic!("Expected Positional"),
+        },
         _ => panic!("Expected Capture"),
     }
 }
@@ -605,34 +631,33 @@ fn test_parse_capture_positional_multiple() {
 fn test_parse_capture_named_single() {
     let stmt = parse_stmt("capture(user=$req.user_id);").unwrap();
     match stmt {
-        AstStatement::Capture { args, .. } => {
-            match args {
-                CaptureArgs::Named(args) => {
-                    assert_eq!(args.len(), 1);
-                    assert_eq!(args[0].name, "user");
-                }
-                _ => panic!("Expected Named"),
+        AstStatement::Capture { args, .. } => match args {
+            CaptureArgs::Named(args) => {
+                assert_eq!(args.len(), 1);
+                assert_eq!(args[0].name, "user");
             }
-        }
+            _ => panic!("Expected Named"),
+        },
         _ => panic!("Expected Capture"),
     }
 }
 
 #[test]
 fn test_parse_capture_named_multiple() {
-    let stmt = parse_stmt("capture(count=len(args), first_value=arg0.data[0][\"value\"], email=arg1.user.email);").unwrap();
+    let stmt = parse_stmt(
+        "capture(count=len(args), first_value=arg0.data[0][\"value\"], email=arg1.user.email);",
+    )
+    .unwrap();
     match stmt {
-        AstStatement::Capture { args, .. } => {
-            match args {
-                CaptureArgs::Named(args) => {
-                    assert_eq!(args.len(), 3);
-                    assert_eq!(args[0].name, "count");
-                    assert_eq!(args[1].name, "first_value");
-                    assert_eq!(args[2].name, "email");
-                }
-                _ => panic!("Expected Named"),
+        AstStatement::Capture { args, .. } => match args {
+            CaptureArgs::Named(args) => {
+                assert_eq!(args.len(), 3);
+                assert_eq!(args[0].name, "count");
+                assert_eq!(args[1].name, "first_value");
+                assert_eq!(args[2].name, "email");
             }
-        }
+            _ => panic!("Expected Named"),
+        },
         _ => panic!("Expected Capture"),
     }
 }
@@ -664,12 +689,10 @@ fn test_parse_sample_from_corpus() {
     // From 04_sampling.hogtrace
     let stmt = parse_stmt("sample 10%;").unwrap();
     match stmt {
-        AstStatement::Sample { spec, .. } => {
-            match spec {
-                SampleSpec::Percentage(10) => (),
-                _ => panic!("Expected Percentage(10)"),
-            }
-        }
+        AstStatement::Sample { spec, .. } => match spec {
+            SampleSpec::Percentage(10) => (),
+            _ => panic!("Expected Percentage(10)"),
+        },
         _ => panic!("Expected Sample"),
     }
 }
@@ -765,14 +788,12 @@ fn test_parse_corpus_05_complex() {
 
     // Check it's a capture with named args
     match &probe.body[0] {
-        AstStatement::Capture { args, .. } => {
-            match args {
-                CaptureArgs::Named(named_args) => {
-                    assert_eq!(named_args.len(), 3);
-                }
-                _ => panic!("Expected named args"),
+        AstStatement::Capture { args, .. } => match args {
+            CaptureArgs::Named(named_args) => {
+                assert_eq!(named_args.len(), 3);
             }
-        }
+            _ => panic!("Expected named args"),
+        },
         _ => panic!("Expected Capture"),
     }
 }
@@ -877,7 +898,10 @@ fn test_parse_complex_module_path() {
 }"#;
     let program = parse_program(source).unwrap();
     let probe = &program.probes[0];
-    assert_eq!(probe.spec.module_function.to_string(), "app.services.user.auth.login");
+    assert_eq!(
+        probe.spec.module_function.to_string(),
+        "app.services.user.auth.login"
+    );
 }
 
 // ===== Error Scenario Tests =====
@@ -893,7 +917,11 @@ fn test_error_missing_semicolon() {
     let err = result.unwrap_err();
     // The error might be Other or UnexpectedToken depending on parser state
     // Just verify we got an error with a helpful message
-    assert!(err.message.contains("Expected") || err.message.contains("semicolon") || err.message.to_lowercase().contains("semi"));
+    assert!(
+        err.message.contains("Expected")
+            || err.message.contains("semicolon")
+            || err.message.to_lowercase().contains("semi")
+    );
 }
 
 #[test]

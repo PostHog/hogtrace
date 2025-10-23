@@ -40,7 +40,10 @@ impl Constant {
             Constant::String(s) => Ok(Value::String(s.clone())),
             Constant::Bool(b) => Ok(Value::Bool(*b)),
             Constant::None => Ok(Value::None),
-            _ => Err(format!("Cannot convert {:?} to Value (not a literal)", self)),
+            _ => Err(format!(
+                "Cannot convert {:?} to Value (not a literal)",
+                self
+            )),
         }
     }
 

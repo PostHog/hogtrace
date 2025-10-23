@@ -328,10 +328,7 @@ mod tests {
     #[test]
     fn test_module_function_with_wildcard() {
         let mf = ModuleFunction {
-            parts: vec![
-                ModulePart::Ident("myapp".to_string()),
-                ModulePart::Wildcard,
-            ],
+            parts: vec![ModulePart::Ident("myapp".to_string()), ModulePart::Wildcard],
             span: dummy_span(),
         };
         assert_eq!(mf.to_string(), "myapp.*");
@@ -380,7 +377,10 @@ mod tests {
             denominator: 10,
         };
         match ratio {
-            SampleSpec::Ratio { numerator, denominator } => {
+            SampleSpec::Ratio {
+                numerator,
+                denominator,
+            } => {
                 assert_eq!(numerator, 1);
                 assert_eq!(denominator, 10);
             }

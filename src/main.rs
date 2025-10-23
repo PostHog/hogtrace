@@ -1,6 +1,6 @@
-use vm::{Constant, ConstantPool, Executor, FnTarget, Opcode, Probe, ProbeSpec, Program, Value};
 use vm::dispatcher::Dispatcher;
-use vm::parser::{Lexer, Parser, Compiler};
+use vm::parser::{Compiler, Lexer, Parser};
+use vm::{Constant, ConstantPool, Executor, FnTarget, Opcode, Probe, ProbeSpec, Program, Value};
 
 // Helper to clone a Value (since Value doesn't implement Clone due to Object variant)
 fn clone_value(value: &Value) -> Value {
@@ -25,7 +25,10 @@ impl SimpleDispatcher {
         // Pre-populate some test variables
         variables.insert("args".to_string(), Value::Int(42));
         variables.insert("arg0".to_string(), Value::Int(150));
-        variables.insert("arg1".to_string(), Value::String("test@example.com".to_string()));
+        variables.insert(
+            "arg1".to_string(),
+            Value::String("test@example.com".to_string()),
+        );
         variables.insert("arg2".to_string(), Value::Bool(true));
 
         Self { variables }
@@ -36,7 +39,8 @@ impl Dispatcher for SimpleDispatcher {
     fn load_variable(&mut self, name: &str) -> Result<Value, String> {
         // Handle request-scoped variables
         if name.starts_with("req.") || name.starts_with("request.") {
-            return self.variables
+            return self
+                .variables
                 .get(name)
                 .map(|v| clone_value(v))
                 .ok_or_else(|| format!("Request variable '{}' not set", name));
@@ -180,7 +184,10 @@ fn example_manual_bytecode() {
 
     match executor.execute(&predicate) {
         Ok(Value::Bool(result)) => {
-            println!("  ✓ Predicate evaluated to: {} (arg0={}, 150 > 10)", result, 150);
+            println!(
+                "  ✓ Predicate evaluated to: {} (arg0={}, 150 > 10)",
+                result, 150
+            );
 
             if result {
                 let mut dispatcher = SimpleDispatcher::new();
@@ -233,10 +240,14 @@ fn:myapp.users.authenticate:entry
                     println!("  ✓ Compilation successful!");
                     println!("  Bytecode version: {}", program.version);
                     println!("  Constant pool size: {}", program.constant_pool.len());
-                    println!("  Total bytecode size: {} bytes",
-                        program.probes.iter()
+                    println!(
+                        "  Total bytecode size: {} bytes",
+                        program
+                            .probes
+                            .iter()
                             .map(|p| p.predicate.len() + p.body.len())
-                            .sum::<usize>());
+                            .sum::<usize>()
+                    );
 
                     // Show constant pool
                     println!("\n  Constant Pool:");
@@ -263,14 +274,19 @@ fn:myapp.users.authenticate:entry
 
                                     // Execute body
                                     let mut dispatcher = SimpleDispatcher::new();
-                                    let mut executor = Executor::new(&program.constant_pool, &mut dispatcher);
+                                    let mut executor =
+                                        Executor::new(&program.constant_pool, &mut dispatcher);
                                     match executor.execute(&probe.body) {
                                         Ok(_) => println!("  ✓ Body executed successfully"),
                                         Err(e) => println!("  ✗ Body error: {}", e),
                                     }
                                 }
-                                Ok(Value::Bool(false)) => println!("  ✓ Predicate: false (body skipped)"),
-                                Ok(other) => println!("  ✗ Predicate returned non-boolean: {:?}", other),
+                                Ok(Value::Bool(false)) => {
+                                    println!("  ✓ Predicate: false (body skipped)")
+                                }
+                                Ok(other) => {
+                                    println!("  ✗ Predicate returned non-boolean: {:?}", other)
+                                }
                                 Err(e) => println!("  ✗ Predicate error: {}", e),
                             }
                         }
@@ -305,18 +321,9 @@ fn example_parser_errors() {
             "Unclosed predicate",
             "fn:test:entry / arg0 > 10 { capture(args); }",
         ),
-        (
-            "Missing semicolon",
-            "fn:test:entry { capture(args) }",
-        ),
-        (
-            "Invalid assignment target",
-            "fn:test:entry { arg0 = 10; }",
-        ),
-        (
-            "Empty probe spec",
-            "::: { capture(args); }",
-        ),
+        ("Missing semicolon", "fn:test:entry { capture(args) }"),
+        ("Invalid assignment target", "fn:test:entry { arg0 = 10; }"),
+        ("Empty probe spec", "::: { capture(args); }"),
     ];
 
     for (i, (description, source)) in test_cases.iter().enumerate() {
@@ -397,7 +404,9 @@ fn:api.*.handler:exit
                     println!("  Probes: {}", program.probes.len());
                     println!("  Constants: {}", program.constant_pool.len());
 
-                    let total_bytecode: usize = program.probes.iter()
+                    let total_bytecode: usize = program
+                        .probes
+                        .iter()
                         .map(|p| p.predicate.len() + p.body.len())
                         .sum();
                     println!("  Total bytecode: {} bytes", total_bytecode);
@@ -406,8 +415,13 @@ fn:api.*.handler:exit
                     println!("\n  Per-Probe Breakdown:");
                     for (i, probe) in program.probes.iter().enumerate() {
                         let total = probe.predicate.len() + probe.body.len();
-                        println!("    Probe {}: {} bytes (pred: {}, body: {})",
-                            i, total, probe.predicate.len(), probe.body.len());
+                        println!(
+                            "    Probe {}: {} bytes (pred: {}, body: {})",
+                            i,
+                            total,
+                            probe.predicate.len(),
+                            probe.body.len()
+                        );
                     }
 
                     // Test protobuf serialization
@@ -423,7 +437,8 @@ fn:api.*.handler:exit
                                     // Verify integrity
                                     let matches = decoded.version == program.version
                                         && decoded.probes.len() == program.probes.len()
-                                        && decoded.constant_pool.len() == program.constant_pool.len();
+                                        && decoded.constant_pool.len()
+                                            == program.constant_pool.len();
 
                                     if matches {
                                         println!("  ✓ Round-trip verification passed");
@@ -478,10 +493,7 @@ fn example_edge_cases() {
             "Wildcards in spec",
             r#"fn:myapp.*.handler:entry { capture(args); }"#,
         ),
-        (
-            "Empty body",
-            r#"fn:test:entry { }"#,
-        ),
+        ("Empty body", r#"fn:test:entry { }"#),
     ];
 
     for (i, (description, source)) in test_cases.iter().enumerate() {
@@ -495,7 +507,9 @@ fn example_edge_cases() {
                 let mut compiler = Compiler::new();
                 match compiler.compile(ast) {
                     Ok(program) => {
-                        let size: usize = program.probes.iter()
+                        let size: usize = program
+                            .probes
+                            .iter()
                             .map(|p| p.predicate.len() + p.body.len())
                             .sum();
                         println!("   ✓ Compiled successfully ({} bytes)", size);
@@ -511,7 +525,8 @@ fn example_edge_cases() {
 // Helper functions
 
 fn hex_dump(bytes: &[u8]) -> String {
-    bytes.iter()
+    bytes
+        .iter()
         .map(|b| format!("{:02x}", b))
         .collect::<Vec<_>>()
         .join(" ")
@@ -543,12 +558,16 @@ fn format_error(source: &str, error: &vm::parser::ParseError) -> String {
 
             // Add caret indicator
             let column = span.start.offset - line_start;
-            let length = (span.end.offset - span.start.offset).max(1).min(line.len() - column);
+            let length = (span.end.offset - span.start.offset)
+                .max(1)
+                .min(line.len() - column);
 
-            output.push_str(&format!("  {}| {}{}\n",
+            output.push_str(&format!(
+                "  {}| {}{}\n",
                 " ".repeat((line_num + 1).to_string().len()),
                 " ".repeat(column),
-                "^".repeat(length)));
+                "^".repeat(length)
+            ));
 
             break;
         }

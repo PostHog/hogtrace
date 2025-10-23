@@ -202,14 +202,6 @@ impl<'a, D: Dispatcher> Executor<'a, D> {
             .ok_or_else(|| "Stack underflow".to_string())
     }
 
-    /// Helper: peek at the top of the stack without popping
-    #[inline]
-    fn peek(&self) -> Result<&Value, String> {
-        self.stack
-            .last()
-            .ok_or_else(|| "Stack is empty".to_string())
-    }
-
     /// Helper: execute a binary operation
     fn binary_op(&mut self, op: BinaryOp) -> Result<(), String> {
         let right = self.pop()?;
@@ -288,7 +280,12 @@ mod tests {
             }
         }
 
-        fn set_attribute(&mut self, _obj: &Value, _attr: &str, _value: Value) -> Result<(), String> {
+        fn set_attribute(
+            &mut self,
+            _obj: &Value,
+            _attr: &str,
+            _value: Value,
+        ) -> Result<(), String> {
             // Mock implementation - just succeed
             Ok(())
         }
@@ -305,7 +302,10 @@ mod tests {
 
                     // Check if this is named arguments (even count, odd indices are strings)
                     let is_named = args.len() % 2 == 0
-                        && args.iter().step_by(2).all(|v| matches!(v, Value::String(_)));
+                        && args
+                            .iter()
+                            .step_by(2)
+                            .all(|v| matches!(v, Value::String(_)));
 
                     if is_named {
                         // Named arguments: args = [name1, value1, name2, value2, ...]
@@ -786,9 +786,11 @@ mod tests {
         let result = executor.execute(&bytecode);
 
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .contains("Unknown variable: unknown_var"));
+        assert!(
+            result
+                .unwrap_err()
+                .contains("Unknown variable: unknown_var")
+        );
     }
 
     // ============================================================================
@@ -1143,7 +1145,7 @@ mod tests {
             0, // 5
             Opcode::PushConst as u8,
             2,
-            0, // 2
+            0,                 // 2
             Opcode::Mul as u8, // 5 * 2 = 10
             Opcode::Add as u8, // 10 + 10 = 20
         ];
@@ -1172,14 +1174,14 @@ mod tests {
             0, // 2
             Opcode::PushConst as u8,
             1,
-            0, // 3
+            0,                 // 3
             Opcode::Mul as u8, // 2 * 3 = 6
             Opcode::PushConst as u8,
             2,
             0, // 4
             Opcode::PushConst as u8,
             3,
-            0, // 5
+            0,                 // 5
             Opcode::Mul as u8, // 4 * 5 = 20
             Opcode::Add as u8, // 6 + 20 = 26
         ];
@@ -1210,7 +1212,7 @@ mod tests {
             0, // test_var (42)
             Opcode::PushConst as u8,
             2,
-            0, // 2
+            0,                 // 2
             Opcode::Mul as u8, // 42 * 2 = 84
             Opcode::Add as u8, // 100 + 84 = 184
         ];
@@ -1238,11 +1240,11 @@ mod tests {
             0, // test_var (42)
             Opcode::PushConst as u8,
             1,
-            0, // 2
+            0,                 // 2
             Opcode::Mul as u8, // 42 * 2 = 84
             Opcode::LoadVar as u8,
             2,
-            0, // count (100)
+            0,                // count (100)
             Opcode::Gt as u8, // 84 > 100 = false
         ];
 
@@ -1301,15 +1303,15 @@ mod tests {
             0, // test_var
             Opcode::PushConst as u8,
             1,
-            0, // 30
+            0,                // 30
             Opcode::Gt as u8, // test_var > 30 (true)
             Opcode::LoadVar as u8,
             2,
             0, // count
             Opcode::PushConst as u8,
             3,
-            0, // 200
-            Opcode::Lt as u8, // count < 200 (true)
+            0,                 // 200
+            Opcode::Lt as u8,  // count < 200 (true)
             Opcode::And as u8, // true && true = true
         ];
 
@@ -1332,11 +1334,11 @@ mod tests {
         let bytecode = vec![
             Opcode::LoadVar as u8,
             0,
-            0, // is_enabled (false)
+            0,                 // is_enabled (false)
             Opcode::Not as u8, // !false = true
             Opcode::LoadVar as u8,
             1,
-            0, // is_active (true)
+            0,                 // is_active (true)
             Opcode::And as u8, // true && true = true
         ];
 
@@ -1363,11 +1365,11 @@ mod tests {
             0, // test_var (42)
             Opcode::PushConst as u8,
             1,
-            0, // 10
+            0,                 // 10
             Opcode::Add as u8, // 42 + 10 = 52
             Opcode::LoadVar as u8,
             2,
-            0, // count (100)
+            0,                // count (100)
             Opcode::Ge as u8, // 52 >= 100 = false
         ];
 
@@ -1399,7 +1401,7 @@ mod tests {
             0, // test_var (42)
             Opcode::PushConst as u8,
             1,
-            0, // 2
+            0,                 // 2
             Opcode::Mul as u8, // 42 * 2 = 84
             Opcode::StoreVar as u8,
             2,
@@ -1409,7 +1411,7 @@ mod tests {
             0, // load "result"
             Opcode::PushConst as u8,
             3,
-            0, // 10
+            0,                 // 10
             Opcode::Add as u8, // 84 + 10 = 94
         ];
 
@@ -1439,7 +1441,7 @@ mod tests {
             0, // count (100)
             Opcode::PushConst as u8,
             1,
-            0, // 2
+            0,                 // 2
             Opcode::Div as u8, // 100 / 2 = 50
             Opcode::StoreVar as u8,
             2,
@@ -1449,7 +1451,7 @@ mod tests {
             0, // test_var (42)
             Opcode::LoadVar as u8,
             2,
-            0, // temp1 (50)
+            0,                 // temp1 (50)
             Opcode::Add as u8, // 42 + 50 = 92
             Opcode::StoreVar as u8,
             4,
@@ -1489,7 +1491,7 @@ mod tests {
             0, // sum
             Opcode::LoadVar as u8,
             2,
-            0, // test_var
+            0,                 // test_var
             Opcode::Add as u8, // sum + test_var
             Opcode::StoreVar as u8,
             1,
@@ -1499,7 +1501,7 @@ mod tests {
             0, // sum
             Opcode::LoadVar as u8,
             3,
-            0, // count
+            0,                 // count
             Opcode::Add as u8, // sum + count
             Opcode::StoreVar as u8,
             1,
@@ -1537,7 +1539,7 @@ mod tests {
             0, // test_var (42)
             Opcode::LoadVar as u8,
             1,
-            0, // count (100)
+            0,                 // count (100)
             Opcode::Add as u8, // 42 + 100 = 142
         ];
 
@@ -1643,18 +1645,18 @@ mod tests {
             0, // test_var (42)
             Opcode::PushConst as u8,
             1,
-            0, // 8
+            0,                 // 8
             Opcode::Add as u8, // 42 + 8 = 50
             Opcode::PushConst as u8,
             2,
-            0, // 2
+            0,                 // 2
             Opcode::Mul as u8, // 50 * 2 = 100
             Opcode::PushConst as u8,
             3,
             0, // 10
             Opcode::PushConst as u8,
             2,
-            0, // 2
+            0,                 // 2
             Opcode::Div as u8, // 10 / 2 = 5
             Opcode::Sub as u8, // 100 - 5 = 95
         ];
@@ -1803,19 +1805,19 @@ mod tests {
             0, // test_var
             Opcode::PushConst as u8,
             1,
-            0, // 30
+            0,                // 30
             Opcode::Gt as u8, // test_var > 30 = true
             Opcode::LoadVar as u8,
             2,
             0, // count
             Opcode::PushConst as u8,
             3,
-            0, // 200
-            Opcode::Lt as u8, // count < 200 = true
+            0,                 // 200
+            Opcode::Lt as u8,  // count < 200 = true
             Opcode::And as u8, // true && true = true
             Opcode::LoadVar as u8,
             4,
-            0, // is_enabled (false)
+            0,                // is_enabled (false)
             Opcode::Or as u8, // true || false = true
         ];
 
@@ -1897,19 +1899,19 @@ mod tests {
             0, // test_var (42)
             Opcode::PushConst as u8,
             1,
-            0, // 2
+            0,                 // 2
             Opcode::Mul as u8, // 42 * 2 = 84
             Opcode::LoadVar as u8,
             2,
             0, // count (100)
             Opcode::PushConst as u8,
             3,
-            0, // 10
+            0,                 // 10
             Opcode::Div as u8, // 100 / 10 = 10
             Opcode::Add as u8, // 84 + 10 = 94
             Opcode::PushConst as u8,
             4,
-            0, // 100
+            0,                // 100
             Opcode::Gt as u8, // 94 > 100 = false
         ];
 
@@ -1992,7 +1994,10 @@ mod tests {
             captures[0].data.get("arg1"),
             Some(Value::String(s)) if s == "hello"
         ));
-        assert!(matches!(captures[0].data.get("arg2"), Some(Value::Bool(true))));
+        assert!(matches!(
+            captures[0].data.get("arg2"),
+            Some(Value::Bool(true))
+        ));
     }
 
     #[test]
@@ -2041,7 +2046,7 @@ mod tests {
             0, // test_var (42)
             Opcode::PushConst as u8,
             1,
-            0, // 10
+            0,                 // 10
             Opcode::Add as u8, // 42 + 10 = 52
             Opcode::CallFunc as u8,
             2,
@@ -2092,7 +2097,10 @@ mod tests {
         let captures = dispatcher.take_captures();
         assert_eq!(captures.len(), 1);
         assert!(matches!(captures[0].data.get("arg0"), Some(Value::Int(42))));
-        assert!(matches!(captures[0].data.get("arg1"), Some(Value::Int(100))));
+        assert!(matches!(
+            captures[0].data.get("arg1"),
+            Some(Value::Int(100))
+        ));
         assert!(matches!(
             captures[0].data.get("arg2"),
             Some(Value::String(s)) if s == "test"
@@ -2133,7 +2141,10 @@ mod tests {
 
         let captures = dispatcher.take_captures();
         assert_eq!(captures.len(), 1);
-        assert!(matches!(captures[0].data.get("user_id"), Some(Value::Int(42))));
+        assert!(matches!(
+            captures[0].data.get("user_id"),
+            Some(Value::Int(42))
+        ));
         assert!(!captures[0].data.contains_key("arg0"));
     }
 
@@ -2182,7 +2193,10 @@ mod tests {
 
         let captures = dispatcher.take_captures();
         assert_eq!(captures.len(), 1);
-        assert!(matches!(captures[0].data.get("user_id"), Some(Value::Int(42))));
+        assert!(matches!(
+            captures[0].data.get("user_id"),
+            Some(Value::Int(42))
+        ));
         assert!(matches!(
             captures[0].data.get("event"),
             Some(Value::String(s)) if s == "login"
@@ -2231,7 +2245,10 @@ mod tests {
         let captures = dispatcher.take_captures();
         assert_eq!(captures.len(), 1);
         assert!(matches!(captures[0].data.get("user"), Some(Value::Int(42))));
-        assert!(matches!(captures[0].data.get("total"), Some(Value::Int(100))));
+        assert!(matches!(
+            captures[0].data.get("total"),
+            Some(Value::Int(100))
+        ));
     }
 
     #[test]
@@ -2256,7 +2273,7 @@ mod tests {
             0, // test_var (42)
             Opcode::LoadVar as u8,
             2,
-            0, // count (100)
+            0,                 // count (100)
             Opcode::Add as u8, // 42 + 100 = 142
             Opcode::PushConst as u8,
             3,
@@ -2266,7 +2283,7 @@ mod tests {
             0, // test_var (42)
             Opcode::PushConst as u8,
             4,
-            0, // 2
+            0,                 // 2
             Opcode::Mul as u8, // 42 * 2 = 84
             Opcode::CallFunc as u8,
             5,
@@ -2281,7 +2298,10 @@ mod tests {
         let captures = dispatcher.take_captures();
         assert_eq!(captures.len(), 1);
         assert!(matches!(captures[0].data.get("sum"), Some(Value::Int(142))));
-        assert!(matches!(captures[0].data.get("double"), Some(Value::Int(84))));
+        assert!(matches!(
+            captures[0].data.get("double"),
+            Some(Value::Int(84))
+        ));
     }
 
     // ============================================================================
@@ -2306,8 +2326,8 @@ mod tests {
             0, // 42
             Opcode::CallFunc as u8,
             1,
-            0, // "capture"
-            1, // 1 argument
+            0,                 // "capture"
+            1,                 // 1 argument
             Opcode::Pop as u8, // Pop the None result
             // Second capture(100)
             Opcode::PushConst as u8,
@@ -2326,7 +2346,10 @@ mod tests {
         let captures = dispatcher.take_captures();
         assert_eq!(captures.len(), 2);
         assert!(matches!(captures[0].data.get("arg0"), Some(Value::Int(42))));
-        assert!(matches!(captures[1].data.get("arg0"), Some(Value::Int(100))));
+        assert!(matches!(
+            captures[1].data.get("arg0"),
+            Some(Value::Int(100))
+        ));
     }
 
     #[test]
@@ -2358,8 +2381,8 @@ mod tests {
             0, // temp (42)
             Opcode::CallFunc as u8,
             3,
-            0, // "capture"
-            2, // 2 arguments
+            0,                 // "capture"
+            2,                 // 2 arguments
             Opcode::Pop as u8, // Pop None
             // temp = count
             Opcode::LoadVar as u8,
@@ -2387,8 +2410,14 @@ mod tests {
 
         let captures = dispatcher.take_captures();
         assert_eq!(captures.len(), 2);
-        assert!(matches!(captures[0].data.get("value"), Some(Value::Int(42))));
-        assert!(matches!(captures[1].data.get("value"), Some(Value::Int(100))));
+        assert!(matches!(
+            captures[0].data.get("value"),
+            Some(Value::Int(42))
+        ));
+        assert!(matches!(
+            captures[1].data.get("value"),
+            Some(Value::Int(100))
+        ));
     }
 
     #[test]
@@ -2435,7 +2464,7 @@ mod tests {
             0, // test_var (42)
             Opcode::PushConst as u8,
             2,
-            0, // 30
+            0,                // 30
             Opcode::Gt as u8, // 42 > 30 = true
             Opcode::CallFunc as u8,
             3,
