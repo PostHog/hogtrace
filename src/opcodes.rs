@@ -105,17 +105,14 @@ impl Opcode {
     /// Returns the number of operand bytes this opcode requires
     pub fn operand_size(&self) -> usize {
         match self {
-            // Opcodes with u16 operand (2 bytes)
             Opcode::PushConst
             | Opcode::LoadVar
             | Opcode::StoreVar
             | Opcode::GetAttr
             | Opcode::SetAttr => 2,
 
-            // CallFunc has u16 + u8 (3 bytes total)
             Opcode::CallFunc => 3,
 
-            // All other opcodes have no operands
             _ => 0,
         }
     }

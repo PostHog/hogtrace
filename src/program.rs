@@ -1,6 +1,10 @@
+//! Program representation and protobuf serialization for HogTrace VM.
+//!
+//! This module defines the compiled program structure that can be executed by the VM
+//! and provides serialization/deserialization via Protocol Buffers.
+
 use crate::constant_pool::{Constant, ConstantPool};
 
-// Include the generated protobuf code
 pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/hogtrace.vm.rs"));
 }

@@ -1,6 +1,8 @@
-use vm::dispatcher::Dispatcher;
-use vm::parser::{Compiler, Lexer, Parser};
-use vm::{Constant, ConstantPool, Executor, FnTarget, Opcode, Probe, ProbeSpec, Program, Value};
+use hogtrace::dispatcher::Dispatcher;
+use hogtrace::parser::{Compiler, Lexer, Parser};
+use hogtrace::{
+    Constant, ConstantPool, Executor, FnTarget, Opcode, Probe, ProbeSpec, Program, Value,
+};
 
 // Helper to clone a Value (since Value doesn't implement Clone due to Object variant)
 fn clone_value(value: &Value) -> Value {
@@ -42,14 +44,14 @@ impl Dispatcher for SimpleDispatcher {
             return self
                 .variables
                 .get(name)
-                .map(|v| clone_value(v))
+                .map(clone_value)
                 .ok_or_else(|| format!("Request variable '{}' not set", name));
         }
 
         // Load regular variables
         self.variables
             .get(name)
-            .map(|v| clone_value(v))
+            .map(clone_value)
             .ok_or_else(|| format!("Unknown variable: {}", name))
     }
 
@@ -66,6 +68,12 @@ impl Dispatcher for SimpleDispatcher {
             (Value::Object(_), "active") => Ok(Value::Bool(true)),
             _ => Err(format!("Attribute '{}' not found", attr)),
         }
+    }
+
+    fn set_attribute(&mut self, _obj: &Value, attr: &str, value: Value) -> Result<(), String> {
+        // Simulate setting an attribute (for demo purposes, just store it)
+        self.variables.insert(format!("attr_{}", attr), value);
+        Ok(())
     }
 
     fn get_item(&mut self, obj: &Value, key: &Value) -> Result<Value, String> {
@@ -167,7 +175,7 @@ fn example_manual_bytecode() {
     };
 
     let program = Program {
-        version: vm::BYTECODE_VERSION,
+        version: hogtrace::BYTECODE_VERSION,
         constant_pool: pool,
         probes: vec![probe],
         sampling: 1.0,
@@ -308,7 +316,7 @@ fn:myapp.users.authenticate:entry
 fn example_parser_errors() {
     print_header("Example 3: Parser - Error Handling");
 
-    let test_cases = vec![
+    let test_cases = [
         (
             "Missing colon in probe spec",
             "fn myapp.test entry { capture(args); }",
@@ -539,7 +547,7 @@ fn indent_code(code: &str) -> String {
         .join("\n")
 }
 
-fn format_error(source: &str, error: &vm::parser::ParseError) -> String {
+fn format_error(source: &str, error: &hogtrace::parser::ParseError) -> String {
     let mut output = String::new();
 
     output.push_str(&format!("  Error: {}\n", error.message));

@@ -152,11 +152,10 @@ impl From<&str> for Value {
     }
 }
 
-// Note: We don't implement Clone for Value because:
-// 1. Box<dyn Any + Send> doesn't implement Clone
-// 2. Py<PyAny> requires a Python GIL token to clone (via clone_ref())
-// Instead, we provide explicit copy methods where needed
-
+/// Value does not implement `Clone` for the following reasons:
+/// 1. The `Object` variant contains `Box<dyn Any + Send>`, which does not implement `Clone`
+/// 2. Python objects (`Py<PyAny>`) require a Python GIL token to clone via `clone_ref()`
+/// 3. Explicit copy methods are provided where needed to make ownership semantics clear
 #[cfg(test)]
 mod tests {
     use super::*;

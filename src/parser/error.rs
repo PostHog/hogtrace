@@ -207,6 +207,7 @@ impl std::error::Error for ParseError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::lexer::Position;
 
     // ===== Basic Error Construction Tests =====
 

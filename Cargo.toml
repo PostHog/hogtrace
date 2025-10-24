@@ -5,7 +5,7 @@ edition = "2024"
 
 [lib]
 name = "hogtrace"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 prost = "0.14.1"

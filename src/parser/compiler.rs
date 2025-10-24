@@ -78,8 +78,6 @@ impl Compiler {
         })
     }
 
-    // ===== Constant Pool Management =====
-
     /// Add a constant to the pool (or return existing index if already present)
     fn add_or_get_constant(&mut self, constant: Constant) -> u16 {
         let key = Self::constant_to_key(&constant);
@@ -107,8 +105,6 @@ impl Compiler {
         }
     }
 
-    // ===== Bytecode Emission =====
-
     /// Emit a single opcode
     fn emit(&mut self, opcode: Opcode) {
         self.bytecode.push(opcode as u8);
@@ -133,8 +129,6 @@ impl Compiler {
     fn take_bytecode(&mut self) -> Vec<u8> {
         std::mem::take(&mut self.bytecode)
     }
-
-    // ===== Expression Compilation =====
 
     /// Compile an expression into bytecode
     fn compile_expr(&mut self, expr: &AstExpr) -> ParseResult<()> {
@@ -284,8 +278,6 @@ impl Compiler {
         Ok(())
     }
 
-    // ===== Statement Compilation =====
-
     /// Compile a statement into bytecode
     fn compile_stmt(&mut self, stmt: &AstStatement) -> ParseResult<()> {
         match stmt {
@@ -393,8 +385,6 @@ impl Compiler {
 
         Ok(())
     }
-
-    // ===== Probe and Program Compilation =====
 
     /// Compile a probe into a Probe struct with bytecode
     fn compile_probe(&mut self, probe: AstProbe, idx: usize) -> ParseResult<Probe> {
@@ -564,8 +554,8 @@ mod tests {
     fn test_float_deduplication() {
         let mut compiler = Compiler::new();
 
-        let idx1 = compiler.add_or_get_constant(Constant::Float(3.14));
-        let idx2 = compiler.add_or_get_constant(Constant::Float(3.14));
+        let idx1 = compiler.add_or_get_constant(Constant::Float(3.15));
+        let idx2 = compiler.add_or_get_constant(Constant::Float(3.15));
         let idx3 = compiler.add_or_get_constant(Constant::Float(2.71));
 
         assert_eq!(idx1, idx2);
@@ -588,8 +578,6 @@ mod tests {
         assert_eq!(idx4, idx5);
         assert_eq!(compiler.constant_pool.len(), 3); // true, false, none
     }
-
-    // ===== Expression Compilation Tests =====
 
     use super::super::Parser;
     use super::super::lexer::Lexer;
@@ -618,13 +606,13 @@ mod tests {
 
     #[test]
     fn test_compile_float_literal() {
-        let (bytecode, pool) = compile_expr_helper("3.14");
+        let (bytecode, pool) = compile_expr_helper("3.15");
 
         assert_eq!(bytecode[0], Opcode::PushConst as u8);
         let idx = u16::from_le_bytes([bytecode[1], bytecode[2]]);
         let constant = pool.get(idx).unwrap();
         if let Constant::Float(f) = constant {
-            assert!((f - 3.14).abs() < 0.001);
+            assert!((f - 3.15).abs() < 0.001);
         } else {
             panic!("Expected Float constant");
         }
@@ -884,8 +872,6 @@ mod tests {
         assert!(matches!(pool.get(idx2).unwrap(), Constant::FieldName(s) if s == "email"));
     }
 
-    // ===== Statement Compilation Tests =====
-
     fn compile_stmt_helper(source: &str) -> (Vec<u8>, ConstantPool) {
         let lexer = Lexer::new(source);
         let mut parser = Parser::new(lexer);
@@ -936,8 +922,6 @@ mod tests {
         assert_eq!(bytecode[9], 2); // 2 arguments
         assert_eq!(bytecode[10], Opcode::Pop as u8);
     }
-
-    // ===== End-to-End Program Compilation Tests =====
 
     #[test]
     fn test_compile_simple_program() {
@@ -1046,8 +1030,6 @@ fn:myapp.test2:entry
         assert_eq!(decoded.probes.len(), program.probes.len());
         assert_eq!(decoded.probes[0].id, program.probes[0].id);
     }
-
-    // ===== Comprehensive Bytecode Validation Tests =====
 
     #[test]
     fn test_bytecode_simple_capture() {

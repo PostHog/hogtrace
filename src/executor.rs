@@ -62,10 +62,10 @@ impl<'a, D: Dispatcher> Executor<'a, D> {
                 }
 
                 Opcode::Dup => {
-                    // Note: Dup is currently not supported because Value doesn't implement Clone
-                    // (due to Object variant containing non-cloneable trait objects)
-                    // If needed in the future, we can handle primitives specially
-                    return Err("DUP instruction not yet implemented".to_string());
+                    return Err(
+                        "DUP instruction not yet implemented (Value doesn't implement Clone)"
+                            .to_string(),
+                    );
                 }
 
                 Opcode::LoadVar => {
@@ -148,7 +148,6 @@ impl<'a, D: Dispatcher> Executor<'a, D> {
                     let arg_count = self.read_u8(bytecode, &mut i)? as usize;
                     let func_name = self.constant_pool.get_string(name_index)?;
 
-                    // Pop arguments from stack
                     if self.stack.len() < arg_count {
                         return Err(format!(
                             "Stack underflow: need {} args for {}(), but only {} on stack",
@@ -301,7 +300,7 @@ mod tests {
                     let mut data = std::collections::HashMap::new();
 
                     // Check if this is named arguments (even count, odd indices are strings)
-                    let is_named = args.len() % 2 == 0
+                    let is_named = args.len().is_multiple_of(2)
                         && args
                             .iter()
                             .step_by(2)

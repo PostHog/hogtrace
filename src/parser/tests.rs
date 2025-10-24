@@ -34,9 +34,9 @@ fn test_parse_int_literal() {
 
 #[test]
 fn test_parse_float_literal() {
-    let expr = parse_expr("3.14").unwrap();
+    let expr = parse_expr("3.15").unwrap();
     match expr {
-        AstExpr::Float { value, .. } => assert!((value - 3.14).abs() < 0.001),
+        AstExpr::Float { value, .. } => assert!((value - 3.15).abs() < 0.001),
         _ => panic!("Expected Float"),
     }
 }
@@ -431,9 +431,7 @@ fn test_operator_precedence_and_or() {
     // a || b && c should parse as a || (b && c)
     let expr = parse_expr("a || b && c").unwrap();
     match expr {
-        AstExpr::Binary {
-            op, left, right, ..
-        } => {
+        AstExpr::Binary { op, right, .. } => {
             assert_eq!(op, BinaryOp::Or);
             match *right {
                 AstExpr::Binary {

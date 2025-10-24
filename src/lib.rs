@@ -32,24 +32,15 @@
 //! });
 //! ```
 
-// Core modules
 pub mod constant_pool;
 pub mod dispatcher;
 pub mod executor;
 pub mod opcodes;
-pub mod program;
-pub mod value;
-
-// Language-specific implementations
-pub mod python_dispatcher;
-
-// Parser
 pub mod parser;
-
-// Python bindings (PyO3)
+pub mod program;
 pub mod python_bindings;
-
-// Re-export main types for convenience
+pub mod python_dispatcher;
+pub mod value;
 pub use constant_pool::{Constant, ConstantPool};
 pub use dispatcher::{BinaryOp, ComparisonOp, Dispatcher};
 pub use executor::Executor;

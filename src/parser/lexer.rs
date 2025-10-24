@@ -688,11 +688,11 @@ mod tests {
 
     #[test]
     fn test_floats() {
-        let tokens = lex_all("3.14 0.5 2.0 1.5e10 1e-5 2.5E+3");
+        let tokens = lex_all("3.15 0.5 2.0 1.5e10 1e-5 2.5E+3");
         assert_eq!(
             kinds(&tokens),
             vec![
-                TokenKind::Float(3.14),
+                TokenKind::Float(3.15),
                 TokenKind::Float(0.5),
                 TokenKind::Float(2.0),
                 TokenKind::Float(1.5e10),
