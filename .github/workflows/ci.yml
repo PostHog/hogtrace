@@ -132,7 +132,7 @@ jobs:
         run: maturin build --release
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: wheels-${{ matrix.os }}
           path: target/wheels/*.whl
