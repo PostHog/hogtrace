@@ -1,3 +1,5 @@
+use std::hash::{Hash, Hasher};
+
 use crate::value::Value;
 
 /// A constant in the constant pool
@@ -29,6 +31,46 @@ pub enum Constant {
 
     /// Function name (e.g., "timestamp", "rand", "capture", "len")
     FunctionName(String),
+}
+
+impl Hash for Constant {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Int(v) => {
+                state.write_u8(0);
+                v.hash(state);
+            }
+            Self::Float(v) => {
+                state.write_u8(1);
+                // Floats do not have a hash, since we do not really care about perfection here
+                // this should be enough for now.
+                state.write_u64(v.to_bits());
+            }
+            Self::String(v) => {
+                state.write_u8(2);
+                v.hash(state);
+            }
+            Self::Bool(v) => {
+                state.write_u8(3);
+                v.hash(state);
+            }
+            Self::None => {
+                state.write_u8(4);
+            }
+            Self::Identifier(v) => {
+                state.write_u8(5);
+                v.hash(state)
+            }
+            Self::FieldName(v) => {
+                state.write_u8(6);
+                v.hash(state)
+            }
+            Self::FunctionName(v) => {
+                state.write_u8(7);
+                v.hash(state)
+            }
+        }
+    }
 }
 
 impl Constant {
@@ -77,7 +119,7 @@ impl Constant {
 /// Constants are accessed by index (u16) from bytecode instructions.
 #[derive(Debug, Clone)]
 pub struct ConstantPool {
-    constants: Vec<Constant>,
+    pub constants: Vec<Constant>,
 }
 
 impl ConstantPool {

@@ -7,7 +7,7 @@ use super::ast::{
 use super::error::{ParseError, ParseResult};
 use crate::constant_pool::{Constant, ConstantPool};
 use crate::opcodes::Opcode;
-use crate::{FnTarget, Probe, ProbeSpec, Program};
+use crate::{CompiledProgram, FnTarget, Probe, ProbeSpec};
 use std::collections::HashMap;
 
 /// Compiler that translates AST to VM bytecode
@@ -62,7 +62,7 @@ impl Compiler {
     }
 
     /// Compile an AST program into VM bytecode
-    pub fn compile(&mut self, ast: AstProgram) -> ParseResult<Program> {
+    pub fn compile(&mut self, ast: AstProgram) -> ParseResult<CompiledProgram> {
         let mut probes = Vec::new();
 
         for (idx, ast_probe) in ast.probes.into_iter().enumerate() {
@@ -70,11 +70,10 @@ impl Compiler {
             probes.push(probe);
         }
 
-        Ok(Program {
-            version: 1,
+        Ok(CompiledProgram {
+            bytecode_version: 1,
             constant_pool: self.constant_pool.clone(),
             probes,
-            sampling: 1.0, // Default sampling rate
         })
     }
 
@@ -936,7 +935,7 @@ mod tests {
         let mut compiler = Compiler::new();
         let program = compiler.compile(ast).unwrap();
 
-        assert_eq!(program.version, 1);
+        assert_eq!(program.bytecode_version, 1);
         assert_eq!(program.probes.len(), 1);
         assert_eq!(program.probes[0].id, "probe_0");
         assert!(program.probes[0].predicate.is_empty());
@@ -1024,9 +1023,9 @@ fn:myapp.test2:entry
 
         // Test protobuf round-trip
         let bytes = program.to_proto_bytes().unwrap();
-        let decoded = Program::from_proto_bytes(&bytes).unwrap();
+        let decoded = CompiledProgram::from_proto_bytes(&bytes).unwrap();
 
-        assert_eq!(decoded.version, program.version);
+        assert_eq!(decoded.bytecode_version, program.bytecode_version);
         assert_eq!(decoded.probes.len(), program.probes.len());
         assert_eq!(decoded.probes[0].id, program.probes[0].id);
     }

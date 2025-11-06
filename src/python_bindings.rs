@@ -7,9 +7,9 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyFrame};
 
 use crate::executor::Executor;
-use crate::parser;
-use crate::program::{FnTarget, Probe, ProbeSpec, Program};
+use crate::program::{FnTarget, HogTraceProgram, Probe, ProbeSpec, ProgramList};
 use crate::python_dispatcher::PythonDispatcher;
+use crate::{CompiledProgram, parser};
 
 /// Compile HogTrace source code into a Program with bytecode
 ///
@@ -27,24 +27,44 @@ use crate::python_dispatcher::PythonDispatcher;
 ///     >>> print(len(program.probes))
 ///     1
 #[pyfunction]
-fn compile(source: &str) -> PyResult<PyProgram> {
+fn compile(source: &str) -> PyResult<PyProgramBytecode> {
     parser::parse(source)
-        .map(|program| PyProgram { inner: program })
+        .map(|program| PyProgramBytecode { inner: program })
         .map_err(|e| PyValueError::new_err(format!("Compilation error: {}", e)))
 }
 
-/// A compiled HogTrace program
-///
-/// Contains bytecode for all probes and a shared constant pool.
-#[pyclass(name = "Program")]
+#[pyclass(name = "ProgramList")]
 #[derive(Clone)]
-struct PyProgram {
-    inner: Program,
+struct PyProgramList {
+    inner: ProgramList,
 }
 
 #[pymethods]
-impl PyProgram {
-    /// Get the number of probes in this program
+impl PyProgramList {
+    #[getter]
+    fn programs(&self) -> Vec<PyProgram> {
+        self.inner
+            .programs
+            .iter()
+            .map(|program| PyProgram {
+                inner: program.clone(),
+            })
+            .collect()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("<Programs programs={}>", self.inner.programs.len(),)
+    }
+}
+
+#[pyclass(name = "ProgramBytecode")]
+#[derive(Clone)]
+struct PyProgramBytecode {
+    inner: CompiledProgram,
+}
+
+#[pymethods]
+impl PyProgramBytecode {
     #[getter]
     fn probes(&self) -> Vec<PyProbe> {
         self.inner
@@ -56,10 +76,62 @@ impl PyProgram {
             .collect()
     }
 
+    #[getter]
+    fn bytecode_version(&self) -> u32 {
+        self.inner.bytecode_version
+    }
+}
+
+/// A compiled HogTrace program
+///
+/// Contains bytecode for all probes and a shared constant pool.
+#[pyclass(name = "Program")]
+#[derive(Clone)]
+struct PyProgram {
+    inner: HogTraceProgram,
+}
+
+#[pymethods]
+impl PyProgram {
+    /// Get the number of probes in this program
+    #[getter]
+    fn probes(&self) -> Vec<PyProbe> {
+        self.inner
+            .compiled_program
+            .probes
+            .iter()
+            .map(|probe| PyProbe {
+                inner: probe.clone(),
+            })
+            .collect()
+    }
+
+    #[getter]
+    fn program_bytecode(&self) -> PyProgramBytecode {
+        PyProgramBytecode {
+            inner: self.inner.compiled_program.clone(),
+        }
+    }
+
     /// Get the bytecode format version
     #[getter]
-    fn version(&self) -> u32 {
-        self.inner.version
+    fn bytecode_version(&self) -> u32 {
+        self.inner.compiled_program.bytecode_version
+    }
+
+    #[getter]
+    fn limit(&self) -> u32 {
+        self.inner.limit
+    }
+
+    #[getter]
+    fn id(&self) -> String {
+        self.inner.id.clone()
+    }
+
+    #[getter]
+    fn hash(&self) -> String {
+        self.inner.hash.clone()
     }
 
     /// Get the global sampling rate
@@ -96,7 +168,7 @@ impl PyProgram {
     ///     RuntimeError: If deserialization fails
     #[staticmethod]
     fn from_bytes(data: &[u8]) -> PyResult<PyProgram> {
-        Program::from_proto_bytes(data)
+        HogTraceProgram::from_proto_bytes(data)
             .map(|program| PyProgram { inner: program })
             .map_err(|e| PyRuntimeError::new_err(format!("Deserialization error: {}", e)))
     }
@@ -104,9 +176,10 @@ impl PyProgram {
     /// String representation
     fn __repr__(&self) -> String {
         format!(
-            "<Program version={} probes={} sampling={}>",
-            self.inner.version,
-            self.inner.probes.len(),
+            "<Program id={} hash={} probes={} sampling={}>",
+            self.inner.id,
+            self.inner.hash,
+            self.inner.compiled_program.probes.len(),
             self.inner.sampling
         )
     }
@@ -216,7 +289,7 @@ impl PyProbeSpec {
 #[pyo3(signature = (program, probe, frame, store, retval=None, exception=None))]
 fn execute_probe<'py>(
     py: Python<'py>,
-    program: &PyProgram,
+    program: &PyProgramBytecode,
     probe: &PyProbe,
     frame: Bound<'py, PyFrame>,
     store: Bound<'py, PyAny>,
@@ -282,7 +355,7 @@ fn execute_probe<'py>(
 ///     >>> result = executor.execute(frame)
 #[pyclass(name = "ProbeExecutor")]
 struct PyProbeExecutor {
-    program: PyProgram,
+    program: PyProgramBytecode,
     probe: PyProbe,
     store: Py<PyAny>,
 }
@@ -296,7 +369,7 @@ impl PyProbeExecutor {
     ///     probe: Probe to execute
     ///     store: RequestLocalStore for cross-probe variables
     #[new]
-    fn new(program: PyProgram, probe: PyProbe, store: Py<PyAny>) -> Self {
+    fn new(program: PyProgramBytecode, probe: PyProbe, store: Py<PyAny>) -> Self {
         PyProbeExecutor {
             program,
             probe,
@@ -347,6 +420,7 @@ fn vm(m: &Bound<'_, pyo3::types::PyModule>) -> PyResult<()> {
 
     // Add classes
     m.add_class::<PyProgram>()?;
+    m.add_class::<PyProgramBytecode>()?;
     m.add_class::<PyProbe>()?;
     m.add_class::<PyProbeSpec>()?;
     m.add_class::<PyProbeExecutor>()?;

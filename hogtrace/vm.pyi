@@ -53,6 +53,19 @@ class Probe:
 
     def __repr__(self) -> str: ...
 
+class ProgramBytecode:
+    """
+    The actual bytecode
+    """
+
+    @property
+    def probes(self) -> List[Probe]:
+        ...
+
+    @property
+    def bytecode_version(self) -> int:
+        ...
+
 class Program:
     """A compiled HogTrace program.
 
@@ -65,7 +78,7 @@ class Program:
         ...
 
     @property
-    def version(self) -> int:
+    def bytecode_version(self) -> int:
         """Get the bytecode format version."""
         ...
 
@@ -84,6 +97,13 @@ class Program:
             >>> program = parse("fn:test:entry {}")
             >>> data = program.to_bytes()
             >>> loaded = Program.from_bytes(data)
+        """
+        ...
+
+    @property
+    def program_bytecode(self) -> ProgramBytecode:
+        """
+        Get the program bytecode
         """
         ...
 
@@ -124,7 +144,7 @@ def compile(source: str) -> Program:
     ...
 
 def execute_probe(
-    program: Program,
+    program: ProgramBytecode,
     probe: Probe,
     frame: FrameType,
     store: "RequestLocalStore",
