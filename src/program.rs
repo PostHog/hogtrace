@@ -3,71 +3,202 @@
 //! This module defines the compiled program structure that can be executed by the VM
 //! and provides serialization/deserialization via Protocol Buffers.
 
+use std::hash::{DefaultHasher, Hash, Hasher};
+
 use crate::constant_pool::{Constant, ConstantPool};
 
 pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/hogtrace.vm.rs"));
 }
 
-/// A compiled HogTrace program ready for execution
 #[derive(Debug, Clone)]
-pub struct Program {
-    /// Bytecode format version
-    pub version: u32,
-
-    /// Shared constant pool for all probes
-    pub constant_pool: ConstantPool,
-
-    /// All probes in the program
-    pub probes: Vec<Probe>,
-
-    /// Global sampling rate (0.0 = no sampling, 1.0 = 100% sampling)
-    pub sampling: f32,
+pub struct ProgramList {
+    pub programs: Vec<HogTraceProgram>,
+    pub retrieved_at: i64,
 }
 
-/// A single probe with its specification and bytecode
 #[derive(Debug, Clone)]
-pub struct Probe {
-    /// Unique probe identifier
+pub struct HogTraceProgram {
     pub id: String,
+    pub sampling: f32,
+    pub hash: String,
+    pub limit: u32,
+    pub compiled_program: CompiledProgram,
+}
 
-    /// Probe specification (where to install the probe)
+#[derive(Debug, Clone)]
+pub struct CompiledProgram {
+    pub bytecode_version: u32,
+    pub constant_pool: ConstantPool,
+    pub probes: Vec<Probe>,
+}
+
+/// This hash is deterministic
+/// This is so even if you reorder the probes or constant pool you'll
+/// end up with the same hash. This is used on the client side to avoid
+/// reinstalling the program if nothing changed.
+impl Hash for CompiledProgram {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // We first pre-hash probes and constants, then we sort them.
+        // This ensures that when you have the same probes but different order that
+        // we will get the same final hash.
+
+        let mut probe_hashes = Vec::with_capacity(self.probes.len());
+
+        for probe in &self.probes {
+            let mut hasher = DefaultHasher::new();
+            probe.hash(&mut hasher);
+            probe_hashes.push(hasher.finish())
+        }
+
+        let mut constant_hashes = Vec::with_capacity(self.constant_pool.constants.len());
+
+        for constant in &self.constant_pool.constants {
+            let mut hasher = DefaultHasher::new();
+            constant.hash(&mut hasher);
+            constant_hashes.push(hasher.finish());
+        }
+
+        probe_hashes.sort();
+        constant_hashes.sort();
+
+        for prehash in probe_hashes.drain(..).chain(constant_hashes.drain(..)) {
+            prehash.hash(state)
+        }
+    }
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct Probe {
+    pub id: String,
     pub spec: ProbeSpec,
-
-    /// Predicate bytecode (empty if no predicate)
     pub predicate: Vec<u8>,
-
-    /// Action body bytecode
     pub body: Vec<u8>,
 }
 
-/// Probe specification - defines where the probe is installed
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub enum ProbeSpec {
-    /// Function probe (fn:module.function:target)
     Fn { specifier: String, target: FnTarget },
 }
 
-/// Function probe target
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FnTarget {
     Entry,
     Exit,
 }
 
-impl Program {
+impl ProgramList {
+    pub fn from_proto_bytes(bytes: &[u8]) -> Result<Self, String> {
+        use prost::Message;
+
+        let proto_programs = proto::ProgramList::decode(bytes)
+            .map_err(|e| format!("Failed to decode protobuf: {}", e))?;
+
+        Self::from_proto(proto_programs)
+    }
+
+    pub fn from_proto(proto: proto::ProgramList) -> Result<Self, String> {
+        let programs = proto
+            .programs
+            .into_iter()
+            .map(HogTraceProgram::from_proto)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(ProgramList {
+            programs: programs,
+            retrieved_at: proto.retrieved_at,
+        })
+    }
+
+    pub fn to_proto_bytes(&self) -> Result<Vec<u8>, String> {
+        use prost::Message;
+
+        let proto = self.to_proto()?;
+        let mut buf = Vec::new();
+        proto
+            .encode(&mut buf)
+            .map_err(|e| format!("Failed to encode protobuf: {}", e))?;
+        Ok(buf)
+    }
+
+    pub fn to_proto(&self) -> Result<proto::ProgramList, String> {
+        Ok(proto::ProgramList {
+            programs: self
+                .programs
+                .iter()
+                .map(HogTraceProgram::to_proto)
+                .collect::<Result<Vec<_>, _>>()?,
+            retrieved_at: self.retrieved_at,
+        })
+    }
+}
+
+impl HogTraceProgram {
+    pub fn from_proto_bytes(bytes: &[u8]) -> Result<Self, String> {
+        use prost::Message;
+
+        let proto_htp = proto::HogTraceProgram::decode(bytes)
+            .map_err(|e| format!("Failed to decode protobuf: {}", e))?;
+
+        Self::from_proto(proto_htp)
+    }
+
+    pub fn from_proto(proto: proto::HogTraceProgram) -> Result<Self, String> {
+        // TODO(Marce): Why is compiled program an Option?
+        let compiled_program = CompiledProgram::from_proto(proto.compiled_program.unwrap())?;
+
+        Ok(Self {
+            id: proto.id,
+            sampling: proto.sampling,
+            hash: proto.hash,
+            limit: proto.limit,
+            compiled_program: compiled_program,
+        })
+    }
+
+    pub fn to_proto_bytes(&self) -> Result<Vec<u8>, String> {
+        use prost::Message;
+
+        let proto = self.to_proto()?;
+        let mut buf = Vec::new();
+        proto
+            .encode(&mut buf)
+            .map_err(|e| format!("Failed to encode protobuf: {}", e))?;
+        Ok(buf)
+    }
+
+    pub fn to_proto(&self) -> Result<proto::HogTraceProgram, String> {
+        Ok(proto::HogTraceProgram {
+            id: self.id.clone(),
+            hash: self.hash.clone(),
+            sampling: self.sampling,
+            limit: self.limit,
+            compiled_program: Some(CompiledProgram::to_proto(&self.compiled_program)?),
+        })
+    }
+}
+
+impl CompiledProgram {
+    pub fn from_compilation(probes: Vec<Probe>, constant_pool: ConstantPool) -> Self {
+        Self {
+            bytecode_version: 1,
+            constant_pool,
+            probes,
+        }
+    }
+
     /// Deserialize a Program from protobuf bytes
     pub fn from_proto_bytes(bytes: &[u8]) -> Result<Self, String> {
         use prost::Message;
 
-        let proto_program = proto::Program::decode(bytes)
+        let proto_program = proto::CompiledProgram::decode(bytes)
             .map_err(|e| format!("Failed to decode protobuf: {}", e))?;
 
         Self::from_proto(proto_program)
     }
 
     /// Convert from protobuf Program message
-    pub fn from_proto(proto: proto::Program) -> Result<Self, String> {
+    pub fn from_proto(proto: proto::CompiledProgram) -> Result<Self, String> {
         let constant_pool = Self::convert_constant_pool(proto.constant_pool)?;
         let probes = proto
             .probes
@@ -75,11 +206,10 @@ impl Program {
             .map(Probe::from_proto)
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(Program {
-            version: proto.version,
+        Ok(CompiledProgram {
+            bytecode_version: proto.bytecode_version,
             constant_pool,
             probes,
-            sampling: proto.sampling,
         })
     }
 
@@ -96,16 +226,15 @@ impl Program {
     }
 
     /// Convert to protobuf Program message
-    pub fn to_proto(&self) -> Result<proto::Program, String> {
-        Ok(proto::Program {
-            version: self.version,
+    pub fn to_proto(&self) -> Result<proto::CompiledProgram, String> {
+        Ok(proto::CompiledProgram {
+            bytecode_version: self.bytecode_version,
             constant_pool: Some(Self::convert_constant_pool_to_proto(&self.constant_pool)?),
             probes: self
                 .probes
                 .iter()
                 .map(Probe::to_proto)
                 .collect::<Result<Vec<_>, _>>()?,
-            sampling: self.sampling,
         })
     }
 
@@ -254,14 +383,20 @@ impl FnTarget {
 mod tests {
     use super::*;
 
+    fn hash_something(v: &impl Hash) -> u64 {
+        let mut h = DefaultHasher::new();
+        v.hash(&mut h);
+        h.finish()
+    }
+
     #[test]
     fn test_program_roundtrip() {
         let mut pool = ConstantPool::new();
         pool.add(Constant::Int(42));
         pool.add(Constant::String("test".to_string()));
 
-        let program = Program {
-            version: 1,
+        let program = CompiledProgram {
+            bytecode_version: 1,
             constant_pool: pool,
             probes: vec![Probe {
                 id: "test_probe".to_string(),
@@ -272,18 +407,59 @@ mod tests {
                 predicate: vec![],
                 body: vec![0x01, 0x00, 0x00], // PUSH_CONST 0
             }],
-            sampling: 1.0,
         };
 
         // Convert to protobuf bytes
         let bytes = program.to_proto_bytes().unwrap();
 
         // Convert back
-        let decoded = Program::from_proto_bytes(&bytes).unwrap();
+        let decoded = CompiledProgram::from_proto_bytes(&bytes).unwrap();
 
-        assert_eq!(decoded.version, 1);
-        assert_eq!(decoded.sampling, 1.0);
+        assert_eq!(decoded.bytecode_version, 1);
         assert_eq!(decoded.probes.len(), 1);
         assert_eq!(decoded.probes[0].id, "test_probe");
+    }
+
+    #[test]
+    fn test_hash() {
+        let mut pool = ConstantPool::new();
+        pool.add(Constant::Int(42));
+        pool.add(Constant::String("test".to_string()));
+        pool.add(Constant::Float(4.2));
+
+        let probe_a = Probe {
+            id: "test_probe".to_string(),
+            spec: ProbeSpec::Fn {
+                specifier: "myapp.users.create".to_string(),
+                target: FnTarget::Entry,
+            },
+            predicate: vec![],
+            body: vec![0x01, 0x00, 0x00],
+        };
+        let probe_b = Probe {
+            id: "test_probe_2".to_string(),
+            spec: ProbeSpec::Fn {
+                specifier: "myapp.users.delete".to_string(),
+                target: FnTarget::Entry,
+            },
+            predicate: vec![],
+            body: vec![0x01, 0x00, 0x10],
+        };
+
+        let program = CompiledProgram {
+            bytecode_version: 1,
+            constant_pool: pool.clone(),
+            probes: vec![probe_a.clone(), probe_b.clone()],
+        };
+
+        assert_eq!(hash_something(&program), hash_something(&program));
+
+        let shuffled_program = CompiledProgram {
+            bytecode_version: 1,
+            constant_pool: pool,
+            probes: vec![probe_b.clone(), probe_a.clone()],
+        };
+
+        assert_eq!(hash_something(&program), hash_something(&shuffled_program),);
     }
 }

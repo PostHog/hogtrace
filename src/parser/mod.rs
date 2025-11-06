@@ -16,10 +16,10 @@ pub use compiler::Compiler;
 pub use error::{ErrorKind, ParseError, ParseResult};
 pub use lexer::{Lexer, Span, Token, TokenKind};
 
-use crate::Program;
+use crate::CompiledProgram;
 
 /// Parse HogTrace source code into a Program
-pub fn parse(source: &str) -> ParseResult<Program> {
+pub fn parse(source: &str) -> ParseResult<CompiledProgram> {
     let lexer = Lexer::new(source);
     let ast = Parser::new(lexer).parse_program()?;
     Compiler::new().compile(ast)

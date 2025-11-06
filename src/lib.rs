@@ -45,7 +45,7 @@ pub use constant_pool::{Constant, ConstantPool};
 pub use dispatcher::{BinaryOp, ComparisonOp, Dispatcher};
 pub use executor::Executor;
 pub use opcodes::Opcode;
-pub use program::{FnTarget, Probe, ProbeSpec, Program};
+pub use program::{CompiledProgram, FnTarget, Probe, ProbeSpec};
 pub use python_dispatcher::PythonDispatcher;
 pub use value::Value;
 

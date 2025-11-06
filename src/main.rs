@@ -1,7 +1,7 @@
 use hogtrace::dispatcher::Dispatcher;
 use hogtrace::parser::{Compiler, Lexer, Parser};
 use hogtrace::{
-    Constant, ConstantPool, Executor, FnTarget, Opcode, Probe, ProbeSpec, Program, Value,
+    CompiledProgram, Constant, ConstantPool, Executor, FnTarget, Opcode, Probe, ProbeSpec, Value,
 };
 
 // Helper to clone a Value (since Value doesn't implement Clone due to Object variant)
@@ -174,11 +174,10 @@ fn example_manual_bytecode() {
         body: body.clone(),
     };
 
-    let program = Program {
-        version: hogtrace::BYTECODE_VERSION,
+    let program = CompiledProgram {
+        bytecode_version: hogtrace::BYTECODE_VERSION,
         constant_pool: pool,
         probes: vec![probe],
-        sampling: 1.0,
     };
 
     println!("\nBytecode (hex):");
@@ -246,7 +245,7 @@ fn:myapp.users.authenticate:entry
             match compiler.compile(ast) {
                 Ok(program) => {
                     println!("  ✓ Compilation successful!");
-                    println!("  Bytecode version: {}", program.version);
+                    println!("  Bytecode version: {}", program.bytecode_version);
                     println!("  Constant pool size: {}", program.constant_pool.len());
                     println!(
                         "  Total bytecode size: {} bytes",
@@ -438,12 +437,13 @@ fn:api.*.handler:exit
                         Ok(bytes) => {
                             println!("  ✓ Serialized to {} bytes", bytes.len());
 
-                            match Program::from_proto_bytes(&bytes) {
+                            match CompiledProgram::from_proto_bytes(&bytes) {
                                 Ok(decoded) => {
                                     println!("  ✓ Deserialized successfully");
 
                                     // Verify integrity
-                                    let matches = decoded.version == program.version
+                                    let matches = decoded.bytecode_version
+                                        == program.bytecode_version
                                         && decoded.probes.len() == program.probes.len()
                                         && decoded.constant_pool.len()
                                             == program.constant_pool.len();

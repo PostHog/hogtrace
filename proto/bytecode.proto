@@ -2,12 +2,25 @@ syntax = "proto3";
 
 package hogtrace.vm;
 
+// A grouping of Program, this will be returned by the program API
+message ProgramList {
+  repeated HogTraceProgram programs = 1;
+  int64 retrieved_at = 2;
+}
+
 // Top-level program containing all probes and shared constant pool
-message Program {
-  uint32 version = 1;              // Bytecode version for compatibility checking
+message HogTraceProgram {
+  string id = 1;                     // Identifier of the program, stable over the lifetime of a program
+  string hash = 2;                   // A hash of the program, useful to detect if anything changed
+  float sampling = 3;                // Program-level sampling rate (0.0-1.0)
+  uint32 limit = 4;                  // How many times should this fire. This is best effort since we can only really guarantee this at the node level.
+  CompiledProgram compiled_program = 5;
+}
+
+message CompiledProgram {
+  uint32 bytecode_version = 1;      // Bytecode version for compatibility checking
   ConstantPool constant_pool = 2;   // Shared constant pool for all probes
   repeated Probe probes = 3;        // All probes in the program
-  float sampling = 4;               // Program-level sampling rate (0.0-1.0)
 }
 
 // Constant pool with all constants used across all bytecode
