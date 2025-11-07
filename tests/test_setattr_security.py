@@ -8,11 +8,12 @@ and cannot be used to modify regular Python objects. This is critical for securi
 import sys
 import pytest
 from hogtrace.vm import compile, execute_probe
-from hogtrace.request_store import RequestLocalStore
+from hogtrace import context
 
 
 class TestObject:
     """Test class for security tests."""
+
     def __init__(self):
         self.value = "original"
 
@@ -27,14 +28,20 @@ def test_cannot_modify_regular_object():
 
 def test_request_store_assignment_works():
     """Verify that request store assignment DOES work (baseline test)."""
-    program = compile("fn:test:entry { $req.value = 'modified'; capture(v=$req.value); }")
-    store = RequestLocalStore()
-    frame = sys._getframe()
+    program = compile(
+        "fn:test:entry { $req.value = 'modified'; capture(v=$req.value); }"
+    )
 
-    result = execute_probe(program, program.probes[0], frame, store)
+    with context.new_context():
+        store = context.get_store()
+        assert store is not None
+        program_store = store.for_program("test-program")
+        frame = sys._getframe()
 
-    assert result is not None
-    assert result["v"] == "modified"
+        result = execute_probe(program, program.probes[0], frame, program_store)
+
+        assert result is not None
+        assert result["v"] == "modified"
 
 
 def test_only_request_variables_assignable():
@@ -47,13 +54,16 @@ def test_only_request_variables_assignable():
         "$request.session = 'bar';",
     ]
 
-    store = RequestLocalStore()
-    frame = sys._getframe()
+    with context.new_context():
+        store = context.get_store()
+        assert store is not None
+        program_store = store.for_program("test-program")
+        frame = sys._getframe()
 
-    for source in valid_programs:
-        program = compile(f"fn:test:entry {{ {source} }}")
-        # Should not raise
-        execute_probe(program, program.probes[0], frame, store)
+        for source in valid_programs:
+            program = compile(f"fn:test:entry {{ {source} }}")
+            # Should not raise
+            execute_probe(program, program.probes[0], frame, program_store)
 
 
 def test_cannot_assign_to_regular_variables():
@@ -101,12 +111,12 @@ def test_request_store_proxy_marker_cannot_be_accessed():
     from hogtrace import vm
 
     # Should not have RequestStoreProxy exposed
-    assert not hasattr(vm, 'RequestStoreProxy')
+    assert not hasattr(vm, "RequestStoreProxy")
 
 
 def test_store_isolation_from_frame_locals():
     """Test that request store is isolated from frame locals."""
-    test_local = "frame_local"
+    test_local = "frame_local"  # noqa
 
     program = compile("""
         fn:test:entry { $req.test_local = 'store_value'; }
@@ -118,57 +128,67 @@ def test_store_isolation_from_frame_locals():
         }
     """)
 
-    store = RequestLocalStore()
-    frame = sys._getframe()
+    with context.new_context():
+        store = context.get_store()
+        assert store is not None
+        program_store = store.for_program("test-program")
+        frame = sys._getframe()
 
-    execute_probe(program, program.probes[0], frame, store)
-    result = execute_probe(program, program.probes[1], frame, store)
+        execute_probe(program, program.probes[0], frame, program_store)
+        result = execute_probe(program, program.probes[1], frame, program_store)
 
-    assert result is not None
-    # Store value should be what we set
-    assert result["from_store"] == "store_value"
-    # Frame local should be unchanged
-    assert result["from_frame"] == "frame_local"
-    # And they should be different
-    assert result["from_store"] != result["from_frame"]
+        assert result is not None
+        # Store value should be what we set
+        assert result["from_store"] == "store_value"
+        # Frame local should be unchanged
+        assert result["from_frame"] == "frame_local"
+        # And they should be different
+        assert result["from_store"] != result["from_frame"]
 
 
 def test_request_vars_dont_leak_to_frame():
     """Test that setting $req.* doesn't modify frame locals."""
     program = compile("fn:test:entry { $req.leaked = 'should not appear'; }")
-    store = RequestLocalStore()
 
-    frame = sys._getframe()
-    execute_probe(program, program.probes[0], frame, store)
+    with context.new_context():
+        store = context.get_store()
+        assert store is not None
+        program_store = store.for_program("test-program")
 
-    # Frame locals should not have request variable names leaked
-    assert 'leaked' not in frame.f_locals
-    assert '$req' not in frame.f_locals
-    assert 'req' not in frame.f_locals
-    assert '$request' not in frame.f_locals
-    assert 'request' not in frame.f_locals
+        frame = sys._getframe()
+        execute_probe(program, program.probes[0], frame, program_store)
+
+        # Frame locals should not have request variable names leaked
+        assert "leaked" not in frame.f_locals
+        assert "$req" not in frame.f_locals
+        assert "req" not in frame.f_locals
+        assert "$request" not in frame.f_locals
+        assert "request" not in frame.f_locals
 
 
 def test_store_method_safety():
-    """Test that RequestLocalStore methods are safe and isolated."""
-    store = RequestLocalStore()
+    """Test that ProgramStore methods are safe and isolated."""
+    with context.new_context():
+        store = context.get_store()
+        assert store is not None
+        program_store = store.for_program("test-program")
 
-    # Set some values
-    store.set("user_id", 123)
-    store.set("session", "abc")
+        # Set some values
+        program_store.set("user_id", 123)
+        program_store.set("session", "abc")
 
-    # Read them back
-    assert store.get("user_id") == 123
-    assert store.get("session") == "abc"
+        # Read them back
+        assert program_store.get("user_id") == 123
+        assert program_store.get("session") == "abc"
 
-    # Reading nonexistent returns None (not error)
-    assert store.get("nonexistent") is None
-    assert store.get("nonexistent", "default") == "default"
+        # Reading nonexistent returns None (not error)
+        assert program_store.get("nonexistent") is None
+        assert program_store.get("nonexistent", "default") == "default"
 
-    # Clear should work
-    store.clear()
-    assert store.get("user_id") is None
-    assert store.get("session") is None
+        # Clear should work
+        program_store.clear()
+        assert program_store.get("user_id") is None
+        assert program_store.get("session") is None
 
 
 if __name__ == "__main__":

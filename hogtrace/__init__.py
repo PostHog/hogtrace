@@ -38,16 +38,8 @@ from hogtrace.vm import (
     BYTECODE_VERSION,
 )
 
-# Import utilities
-from hogtrace.request_store import RequestLocalStore, RequestContext
-
-# Serialization removed - use Program.to_bytes() / Program.from_bytes() instead
-# from hogtrace.serialization import (
-#     program_to_json,
-#     program_from_json,
-#     serialize_program,
-#     deserialize_program,
-# )
+from hogtrace.request_store import RequestLocalStore
+from hogtrace.context import get_store
 
 __version__ = "0.1.0"
 
@@ -63,7 +55,7 @@ __all__ = [
     "BYTECODE_VERSION",
     # Utilities
     "RequestLocalStore",
-    "RequestContext",
+    "get_store",
     # Errors
     "CompilationError",
 ]

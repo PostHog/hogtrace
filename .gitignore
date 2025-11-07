@@ -49,3 +49,4 @@ generated/
 Thumbs.db
 
 target/
+*.pyc
