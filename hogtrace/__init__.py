@@ -39,7 +39,7 @@ from hogtrace.vm import (
 )
 
 from hogtrace.request_store import RequestLocalStore
-from hogtrace.context import get_store
+from hogtrace.context import get_store, get_scope
 
 __version__ = "0.1.0"
 
@@ -56,6 +56,7 @@ __all__ = [
     # Utilities
     "RequestLocalStore",
     "get_store",
+    "get_scope",
     # Errors
     "CompilationError",
 ]
