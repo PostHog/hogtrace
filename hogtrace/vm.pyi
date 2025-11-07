@@ -66,6 +66,10 @@ class ProgramBytecode:
     @property
     def bytecode_version(self) -> int: ...
 
+class ProgramList:
+    @property
+    def programs(self) -> List[Program]: ...
+
 class Program:
     """A compiled HogTrace program.
 

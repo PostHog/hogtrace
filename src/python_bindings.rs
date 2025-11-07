@@ -65,6 +65,13 @@ impl PyProgramList {
             .collect()
     }
 
+    #[staticmethod]
+    fn from_bytes(data: &[u8]) -> PyResult<PyProgramList> {
+        ProgramList::from_proto_bytes(data)
+            .map(|program_list| PyProgramList { inner: program_list })
+            .map_err(|e| PyRuntimeError::new_err(format!("blah blah {}", e)))
+    }
+
     fn __repr__(&self) -> String {
         format!("<Programs programs={}>", self.inner.programs.len(),)
     }
@@ -442,6 +449,7 @@ fn vm(m: &Bound<'_, pyo3::types::PyModule>) -> PyResult<()> {
 
     // Add classes
     m.add_class::<PyProgram>()?;
+    m.add_class::<PyProgramList>()?;
     m.add_class::<PyProgramBytecode>()?;
     m.add_class::<PyProbe>()?;
     m.add_class::<PyProbeSpec>()?;
