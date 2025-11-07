@@ -141,6 +141,85 @@ impl<'py> PythonDispatcher<'py> {
         }
     }
 
+    /// Helper: serialize Python object to Value on a best-effort basis
+    /// Recursively converts objects to dictionaries, lists, or primitives
+    fn serialize_object(&self, obj: &Bound<'py, PyAny>, depth: usize) -> Value {
+        // Prevent infinite recursion
+        const MAX_DEPTH: usize = 10;
+        if depth >= MAX_DEPTH {
+            return Value::String("<max depth reached>".to_string());
+        }
+
+        // Try primitive conversions first
+        if let Ok(b) = obj.extract::<bool>() {
+            return Value::Bool(b);
+        }
+        if let Ok(i) = obj.extract::<i64>() {
+            return Value::Int(i);
+        }
+        if let Ok(f) = obj.extract::<f64>() {
+            return Value::Float(f);
+        }
+        if let Ok(s) = obj.extract::<String>() {
+            return Value::String(s);
+        }
+        if obj.is_none() {
+            return Value::None;
+        }
+
+        // Try to get __dict__ for custom objects
+        if let Ok(dict) = obj.getattr("__dict__") {
+            if let Ok(py_dict) = dict.downcast_into::<pyo3::types::PyDict>() {
+                let mut result = HashMap::new();
+                for (key, value) in py_dict.iter() {
+                    if let Ok(key_str) = key.extract::<String>() {
+                        let serialized_value = self.serialize_object(&value, depth + 1);
+                        // Only store serializable values
+                        match serialized_value {
+                            Value::String(ref s) if s == "<unserializable>" => continue,
+                            _ => {
+                                result.insert(key_str, serialized_value);
+                            }
+                        }
+                    }
+                }
+                // Convert HashMap to a string representation for now
+                // since Value doesn't support nested structures
+                let json_like = self.hashmap_to_string(&result);
+                return Value::String(json_like);
+            }
+        }
+
+        // Fall back to string representation
+        if let Ok(repr) = obj.repr() {
+            if let Ok(repr_str) = repr.extract::<String>() {
+                return Value::String(repr_str);
+            }
+        }
+
+        Value::String("<unserializable>".to_string())
+    }
+
+    /// Helper: convert HashMap<String, Value> to a JSON-like string
+    fn hashmap_to_string(&self, map: &HashMap<String, Value>) -> String {
+        let mut parts: Vec<String> = map
+            .iter()
+            .map(|(k, v)| {
+                let value_str = match v {
+                    Value::Bool(b) => b.to_string(),
+                    Value::Int(i) => i.to_string(),
+                    Value::Float(f) => f.to_string(),
+                    Value::String(s) => format!("\"{}\"", s.replace('"', "\\\"")),
+                    Value::None => "null".to_string(),
+                    Value::Object(_) => "\"<object>\"".to_string(),
+                };
+                format!("\"{}\": {}", k, value_str)
+            })
+            .collect();
+        parts.sort(); // For consistent output
+        format!("{{{}}}", parts.join(", "))
+    }
+
     /// Get function arguments as a tuple
     fn get_args(&self) -> Result<Value, String> {
         // Access frame locals to get function arguments
@@ -391,7 +470,14 @@ impl<'py> Dispatcher for PythonDispatcher<'py> {
                                 Value::Float(f) => Value::Float(*f),
                                 Value::String(s) => Value::String(s.clone()),
                                 Value::None => Value::None,
-                                Value::Object(_) => Value::None, // Can't clone objects
+                                Value::Object(obj) => {
+                                    // Try to serialize the object
+                                    if let Some(py_obj) = obj.downcast_ref::<Py<PyAny>>() {
+                                        self.serialize_object(py_obj.bind(self.py), 0)
+                                    } else {
+                                        Value::String("<unserializable>".to_string())
+                                    }
+                                }
                             };
                             data.insert(key.clone(), value);
                         }
@@ -405,7 +491,14 @@ impl<'py> Dispatcher for PythonDispatcher<'py> {
                             Value::Float(f) => Value::Float(f),
                             Value::String(s) => Value::String(s),
                             Value::None => Value::None,
-                            Value::Object(_) => Value::None,
+                            Value::Object(obj) => {
+                                // Try to serialize the object
+                                if let Some(py_obj) = obj.downcast_ref::<Py<PyAny>>() {
+                                    self.serialize_object(py_obj.bind(self.py), 0)
+                                } else {
+                                    Value::String("<unserializable>".to_string())
+                                }
+                            }
                         };
                         data.insert(format!("arg{}", i), value);
                     }
