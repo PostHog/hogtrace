@@ -25,7 +25,10 @@ Usage:
     result = executor.execute(frame)
 """
 
+from __future__ import annotations
+
 from pathlib import Path
+from typing import Union
 
 # Import Rust VM components
 from hogtrace.vm import (
@@ -68,7 +71,7 @@ class CompilationError(Exception):
     pass
 
 
-def compile_file(file_path: str | Path) -> Program:
+def compile_file(file_path: Union[str, Path]) -> Program:
     """
     Compile a HogTrace file and return a Program.
 
