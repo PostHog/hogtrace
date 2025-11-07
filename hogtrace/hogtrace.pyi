@@ -71,7 +71,8 @@ class Program:
 
     Contains bytecode for all probes and a shared constant pool.
     """
-
+    @property
+    def id(self) -> str: ...
     @property
     def probes(self) -> List[Probe]:
         """Get the list of probes in this program."""
@@ -124,7 +125,7 @@ class Program:
 
     def __repr__(self) -> str: ...
 
-def compile(source: str) -> Program:
+def compile(source: str) -> ProgramBytecode:
     """Compile HogTrace source code into a Program with bytecode.
 
     Args:
@@ -143,8 +144,12 @@ def compile(source: str) -> Program:
     """
     ...
 
+def package(id: str, bytecode: ProgramBytecode) -> Program:
+    """Package a compiled program into a full HogTrace program."""
+    ...
+
 def execute_probe(
-    program: Union[Program, ProgramBytecode],
+    program: ProgramBytecode,
     probe: Probe,
     frame: FrameType,
     store: "StoreType",
@@ -154,7 +159,7 @@ def execute_probe(
     """Execute a probe against a Python frame.
 
     Args:
-        program: The compiled program (or program bytecode) containing the probe
+        program: Program bytecode containing the probe
         probe: The probe to execute
         frame: Python frame object
         store: ProgramStore or RequestLocalStore for cross-probe variable persistence

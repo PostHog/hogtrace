@@ -33,6 +33,19 @@ fn compile(source: &str) -> PyResult<PyProgramBytecode> {
         .map_err(|e| PyValueError::new_err(format!("Compilation error: {}", e)))
 }
 
+#[pyfunction]
+fn package(id: &str, bytecode: PyProgramBytecode) -> PyProgram {
+    PyProgram {
+        inner: HogTraceProgram { 
+            id: id.to_owned(), 
+            sampling: 1.0, 
+            hash: "test".to_owned(), 
+            limit: 1000, 
+            compiled_program: bytecode.inner.clone()
+        }
+    }
+}
+
 #[pyclass(name = "ProgramList")]
 #[derive(Clone)]
 struct PyProgramList {
@@ -424,6 +437,7 @@ impl PyProbeExecutor {
 fn vm(m: &Bound<'_, pyo3::types::PyModule>) -> PyResult<()> {
     // Add functions
     m.add_function(wrap_pyfunction!(compile, m)?)?;
+    m.add_function(wrap_pyfunction!(package, m)?)?;
     m.add_function(wrap_pyfunction!(execute_probe, m)?)?;
 
     // Add classes
