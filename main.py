@@ -5,7 +5,6 @@ HogTrace CLI - Parse and validate HogTrace programs.
 
 import sys
 import argparse
-from pathlib import Path
 import hogtrace
 from hogtrace.ast import ActionType
 
@@ -31,8 +30,8 @@ def print_program(program: hogtrace.Program, verbose: bool = False):
                     print(f"    - {action}")
 
         if verbose:
-            print(f"\n  Raw probe:")
-            for line in str(probe).split('\n'):
+            print("\n  Raw probe:")
+            for line in str(probe).split("\n"):
                 print(f"    {line}")
 
         print()
@@ -90,28 +89,30 @@ Examples:
 For more information, see the documentation at:
   SPEC.md - Language specification
   TESTING.md - Testing guide
-        """
+        """,
     )
 
-    subparsers = parser.add_subparsers(dest='command', help='Command to run')
+    subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     # Parse command
-    parse_parser = subparsers.add_parser('parse', help='Parse a HogTrace file')
-    parse_parser.add_argument('file', type=str, help='HogTrace file to parse')
-    parse_parser.add_argument('-v', '--verbose', action='store_true',
-                            help='Show detailed output')
+    parse_parser = subparsers.add_parser("parse", help="Parse a HogTrace file")
+    parse_parser.add_argument("file", type=str, help="HogTrace file to parse")
+    parse_parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Show detailed output"
+    )
     parse_parser.set_defaults(func=cmd_parse)
 
     # Validate command
-    validate_parser = subparsers.add_parser('validate', help='Validate HogTrace syntax')
-    validate_parser.add_argument('file', type=str, help='HogTrace file to validate')
+    validate_parser = subparsers.add_parser("validate", help="Validate HogTrace syntax")
+    validate_parser.add_argument("file", type=str, help="HogTrace file to validate")
     validate_parser.set_defaults(func=cmd_validate)
 
     # Eval command
-    eval_parser = subparsers.add_parser('eval', help='Evaluate HogTrace code')
-    eval_parser.add_argument('code', type=str, help='HogTrace code to evaluate')
-    eval_parser.add_argument('-v', '--verbose', action='store_true',
-                           help='Show detailed output')
+    eval_parser = subparsers.add_parser("eval", help="Evaluate HogTrace code")
+    eval_parser.add_argument("code", type=str, help="HogTrace code to evaluate")
+    eval_parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Show detailed output"
+    )
     eval_parser.set_defaults(func=cmd_eval)
 
     args = parser.parse_args()

@@ -2,169 +2,112 @@
 Request-scoped variable storage for HogTrace.
 
 This module provides thread-safe storage for per-request variables ($req.* or $request.*).
+Variables are isolated both per-request (via context) and per-program.
 """
 
-import threading
-from typing import Any, Optional
-from contextvars import ContextVar
+from typing import Any
+
+
+class ProgramStore:
+    """
+    Program-scoped storage for request variables.
+
+    Each program gets its own isolated storage within a request context.
+    """
+
+    def __init__(self, program_id: str):
+        self._program_id = program_id
+        self._storage: dict[str, Any] = {}
+
+    def set(self, name: str, value: Any) -> None:
+        """Set a variable."""
+        self._storage[name] = value
+
+    def get(self, name: str, default: Any = None) -> Any:
+        """Get a variable."""
+        return self._storage.get(name, default)
+
+    def has(self, name: str) -> bool:
+        """Check if a variable exists."""
+        return name in self._storage
+
+    def delete(self, name: str) -> None:
+        """Delete a variable."""
+        self._storage.pop(name, None)
+
+    def clear(self) -> None:
+        """Clear all variables."""
+        self._storage.clear()
+
+    def all(self) -> dict[str, Any]:
+        """Get all variables as a dict."""
+        return self._storage.copy()
+
+    def __contains__(self, name: str) -> bool:
+        """Support 'name in store' syntax."""
+        return self.has(name)
+
+    def __getitem__(self, name: str) -> Any:
+        """Support store[name] syntax."""
+        return self._storage[name]
+
+    def __setitem__(self, name: str, value: Any) -> None:
+        """Support store[name] = value syntax."""
+        self.set(name, value)
+
+    def __repr__(self) -> str:
+        return f"ProgramStore(program_id={self._program_id!r}, vars={self._storage})"
 
 
 class RequestLocalStore:
     """
     Thread-safe and async-safe storage for request-scoped variables.
 
-    Uses contextvars for proper async support, with threading.local as fallback.
-    This allows probes to set and read variables that persist across function
-    calls within a single request.
+    Manages program-scoped stores within a request context.
+    Use via context.get_store() to get the store for the current request.
 
     Example:
-        # In request middleware
-        store = RequestLocalStore()
-        store.set("user_id", 123)
-        store.set("start_time", time.time())
+        from hogtrace import context
 
-        # In a probe later in the request
-        user_id = store.get("user_id")  # Returns 123
+        # In request middleware (handled by integration)
+        with context.new_context():
+            store = context.get_store()
+            program_store = store.for_program("program-123")
+
+            program_store.set("user_id", 123)
+            user_id = program_store.get("user_id")  # Returns 123
+
+            # Different program in same request - isolated
+            other_store = store.for_program("program-456")
+            other_store.get("user_id")  # Returns None
     """
 
     def __init__(self):
-        # Use ContextVar for async-safe storage (Python 3.7+)
-        # Each ContextVar holds a dict of variables for the current context
-        self._context: ContextVar[dict[str, Any]] = ContextVar(
-            'hogtrace_request_vars',
-            default=None
-        )
+        self._programs: dict[str, ProgramStore] = {}
 
-        # Fallback to thread-local storage for non-async contexts
-        self._thread_local = threading.local()
-
-    def _get_storage(self) -> dict[str, Any]:
-        """Get the storage dict for the current context"""
-        try:
-            # Try to get from context var (works in async)
-            storage = self._context.get()
-            if storage is None:
-                storage = {}
-                self._context.set(storage)
-            return storage
-        except LookupError:
-            # Fallback to thread-local
-            if not hasattr(self._thread_local, 'storage'):
-                self._thread_local.storage = {}
-            return self._thread_local.storage
-
-    def set(self, name: str, value: Any) -> None:
+    def for_program(self, program_id: str) -> ProgramStore:
         """
-        Set a request-scoped variable.
+        Get or create a program-scoped store.
 
         Args:
-            name: Variable name (without $req. prefix)
-            value: Value to store
-        """
-        storage = self._get_storage()
-        storage[name] = value
-
-    def get(self, name: str, default: Any = None) -> Any:
-        """
-        Get a request-scoped variable.
-
-        Args:
-            name: Variable name (without $req. prefix)
-            default: Default value if not found
+            program_id: Unique identifier for the program
 
         Returns:
-            The stored value or default
+            ProgramStore: A scoped store for this program's variables
         """
-        storage = self._get_storage()
-        return storage.get(name, default)
-
-    def has(self, name: str) -> bool:
-        """
-        Check if a variable exists.
-
-        Args:
-            name: Variable name
-
-        Returns:
-            True if the variable is set
-        """
-        storage = self._get_storage()
-        return name in storage
-
-    def delete(self, name: str) -> None:
-        """
-        Delete a request-scoped variable.
-
-        Args:
-            name: Variable name
-        """
-        storage = self._get_storage()
-        storage.pop(name, None)
+        if program_id not in self._programs:
+            self._programs[program_id] = ProgramStore(program_id)
+        return self._programs[program_id]
 
     def clear(self) -> None:
-        """Clear all variables in the current context"""
-        storage = self._get_storage()
-        storage.clear()
+        """Clear all program stores in this request."""
+        for program_store in self._programs.values():
+            program_store.clear()
 
-    def all(self) -> dict[str, Any]:
-        """
-        Get all variables in the current context.
-
-        Returns:
-            Dict of all stored variables
-        """
-        return self._get_storage().copy()
-
-    def __contains__(self, name: str) -> bool:
-        """Support 'name in store' syntax"""
-        return self.has(name)
-
-    def __getitem__(self, name: str) -> Any:
-        """Support store[name] syntax"""
-        storage = self._get_storage()
-        return storage[name]
-
-    def __setitem__(self, name: str, value: Any) -> None:
-        """Support store[name] = value syntax"""
-        self.set(name, value)
+    def all_programs(self) -> list[str]:
+        """Get list of all program IDs that have stores."""
+        return list(self._programs.keys())
 
     def __repr__(self) -> str:
-        storage = self._get_storage()
-        return f"RequestLocalStore({storage})"
-
-
-class RequestContext:
-    """
-    Context manager for request-scoped storage.
-
-    Ensures variables are cleared when the request completes.
-
-    Example:
-        store = RequestLocalStore()
-
-        with RequestContext(store):
-            store.set("user_id", 123)
-            # Process request...
-            # Variables available here
-        # Variables cleared automatically
-    """
-
-    def __init__(self, store: RequestLocalStore):
-        self.store = store
-        self._token = None
-
-    def __enter__(self):
-        # Create a new context with empty storage
-        self._token = self.store._context.set({})
-        return self.store
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        # Clear storage
-        self.store.clear()
-        # Reset context
-        if self._token is not None:
-            try:
-                self.store._context.reset(self._token)
-            except:
-                pass  # Ignore reset errors
-        return False
+        total_vars = sum(len(ps.all()) for ps in self._programs.values())
+        return f"RequestLocalStore(programs={list(self._programs.keys())}, total_vars={total_vars})"

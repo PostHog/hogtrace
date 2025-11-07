@@ -4,11 +4,14 @@ Type stubs for the HogTrace Rust VM extension module.
 This module provides Python bindings to the Rust-based HogTrace virtual machine.
 """
 
-from typing import List, Optional, Dict, Any, TYPE_CHECKING
+from typing import List, Optional, Dict, Any, TYPE_CHECKING, Union
 from types import FrameType
 
 if TYPE_CHECKING:
-    from hogtrace.request_store import RequestLocalStore
+    from hogtrace.request_store import RequestLocalStore, ProgramStore
+
+    # Type alias for store parameter - accepts both RequestLocalStore and ProgramStore
+    StoreType = Union[RequestLocalStore, ProgramStore]
 
 # Module constants
 BYTECODE_VERSION: int
@@ -59,12 +62,9 @@ class ProgramBytecode:
     """
 
     @property
-    def probes(self) -> List[Probe]:
-        ...
-
+    def probes(self) -> List[Probe]: ...
     @property
-    def bytecode_version(self) -> int:
-        ...
+    def bytecode_version(self) -> int: ...
 
 class Program:
     """A compiled HogTrace program.
@@ -144,20 +144,20 @@ def compile(source: str) -> Program:
     ...
 
 def execute_probe(
-    program: ProgramBytecode,
+    program: Union[Program, ProgramBytecode],
     probe: Probe,
     frame: FrameType,
-    store: "RequestLocalStore",
+    store: "StoreType",
     retval: Optional[Any] = None,
     exception: Optional[BaseException] = None,
 ) -> Optional[Dict[str, Any]]:
     """Execute a probe against a Python frame.
 
     Args:
-        program: The compiled program containing the probe
+        program: The compiled program (or program bytecode) containing the probe
         probe: The probe to execute
         frame: Python frame object
-        store: RequestLocalStore for cross-probe variable persistence
+        store: ProgramStore or RequestLocalStore for cross-probe variable persistence
         retval: Optional return value (for exit probes)
         exception: Optional exception (for exit probes)
 
@@ -166,12 +166,14 @@ def execute_probe(
 
     Example:
         >>> import sys
-        >>> from hogtrace.request_store import RequestLocalStore
+        >>> from hogtrace import context
         >>> program = compile("fn:test:entry { capture(arg0=args[0]); }")
         >>> probe = program.probes[0]
         >>> frame = sys._getframe()
-        >>> store = RequestLocalStore()
-        >>> result = execute_probe(program, probe, frame, store)
+        >>> with context.new_context():
+        >>>     store = context.get_store()
+        >>>     program_store = store.for_program("my-program")
+        >>>     result = execute_probe(program, probe, frame, program_store)
     """
     ...
 
@@ -179,20 +181,22 @@ class ProbeExecutor:
     """Probe executor for executing probes against Python frames.
 
     Example:
-        >>> from hogtrace.request_store import RequestLocalStore
+        >>> from hogtrace import context
         >>> program = compile("fn:test:entry { capture(args); }")
-        >>> store = RequestLocalStore()
-        >>> executor = ProbeExecutor(program, program.probes[0], store)
-        >>> result = executor.execute(frame)
+        >>> with context.new_context():
+        >>>     store = context.get_store()
+        >>>     program_store = store.for_program("my-program")
+        >>>     executor = ProbeExecutor(program, program.probes[0], program_store)
+        >>>     result = executor.execute(frame)
     """
 
-    def __init__(self, program: Program, probe: Probe, store: "RequestLocalStore") -> None:
+    def __init__(self, program: Program, probe: Probe, store: "StoreType") -> None:
         """Create a new probe executor.
 
         Args:
             program: The compiled program
             probe: The probe to execute
-            store: RequestLocalStore for cross-probe variable persistence
+            store: ProgramStore or RequestLocalStore for cross-probe variable persistence
         """
         ...
 

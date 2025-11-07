@@ -80,6 +80,14 @@ impl PyProgramBytecode {
     fn bytecode_version(&self) -> u32 {
         self.inner.bytecode_version
     }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "<ProgramBytecode probes={} constants={}>",
+            self.inner.probes.len(),
+            self.inner.constant_pool.constants.len(),
+        )
+    }
 }
 
 /// A compiled HogTrace program
