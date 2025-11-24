@@ -33,6 +33,7 @@ from typing import Union
 # Import Rust VM components
 from hogtrace.vm import (
     compile,
+    package,
     execute_probe,
     Program,
     ProgramList,
@@ -50,6 +51,7 @@ __version__ = "0.1.0"
 __all__ = [
     # Core VM (Rust)
     "compile",
+    "package",
     "compile_file",
     "execute_probe",
     "ProgramList",
