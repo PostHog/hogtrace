@@ -72,6 +72,16 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Ensure cargo on PATH
+        # See the matching step in the rust-tests job for rationale —
+        # the dtolnay action skips its $CARGO_HOME/bin PATH update when
+        # rustup is pre-detected, which on macos-latest arm64 runners
+        # lets a stale `rustup-init` shim win over the rustup-managed
+        # cargo. The Install UV step appends the same path later, but
+        # by then maturin develop has already failed.
+        run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        shell: bash
+
       - name: Install protoc
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then
@@ -125,6 +135,10 @@ jobs:
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
           toolchain: stable
+
+      - name: Ensure cargo on PATH
+        run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        shell: bash
 
       - name: Install protoc
         run: |
