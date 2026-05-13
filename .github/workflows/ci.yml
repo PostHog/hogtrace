@@ -23,6 +23,15 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Ensure cargo on PATH
+        # The dtolnay action only appends $CARGO_HOME/bin to PATH when it
+        # installs rustup itself. On runners with a pre-existing rustup in
+        # an unusual location, `cargo` can fall through to a stray
+        # `rustup-init` shim. Always prepend the cargo bin dir so the
+        # rustup-managed cargo wins.
+        run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        shell: bash
+
       - name: Install protoc
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then
