@@ -19,7 +19,24 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
+        with:
+          toolchain: stable
+
+      - name: Prepend rustup toolchain bin dir to PATH
+        # macos-latest arm64 runners ship `~/.cargo/bin/cargo` as a stale
+        # `rustup-init` shim, not the multi-call rustup binary. So even
+        # after rustup default stable, `cargo` / `rustc` on PATH fall
+        # through to the broken shim and tools like maturin die with
+        # "unexpected `rustc -vV` format". Ask rustup where the real
+        # cargo for the active toolchain lives, and prepend its parent
+        # directory (the toolchain's own bin/, with the actual binaries).
+        run: |
+          set -euo pipefail
+          TOOLCHAIN_BIN="$(dirname "$(rustup which cargo)")"
+          echo "Prepending $TOOLCHAIN_BIN to PATH"
+          echo "$TOOLCHAIN_BIN" >> "$GITHUB_PATH"
+        shell: bash
 
       - name: Install protoc
         run: |
@@ -31,7 +48,7 @@ jobs:
         shell: bash
 
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.9.1
 
       - name: Run Rust tests
         run: cargo test --lib --verbose
@@ -57,7 +74,18 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
+        with:
+          toolchain: stable
+
+      - name: Prepend rustup toolchain bin dir to PATH
+        # See the matching step in the rust-tests job for rationale.
+        run: |
+          set -euo pipefail
+          TOOLCHAIN_BIN="$(dirname "$(rustup which cargo)")"
+          echo "Prepending $TOOLCHAIN_BIN to PATH"
+          echo "$TOOLCHAIN_BIN" >> "$GITHUB_PATH"
+        shell: bash
 
       - name: Install protoc
         run: |
@@ -69,7 +97,7 @@ jobs:
         shell: bash
 
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.9.1
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -109,7 +137,18 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
+        with:
+          toolchain: stable
+
+      - name: Prepend rustup toolchain bin dir to PATH
+        # See the matching step in the rust-tests job for rationale.
+        run: |
+          set -euo pipefail
+          TOOLCHAIN_BIN="$(dirname "$(rustup which cargo)")"
+          echo "Prepending $TOOLCHAIN_BIN to PATH"
+          echo "$TOOLCHAIN_BIN" >> "$GITHUB_PATH"
+        shell: bash
 
       - name: Install protoc
         run: |
