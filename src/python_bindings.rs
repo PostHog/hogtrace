@@ -54,6 +54,28 @@ struct PyProgramList {
 
 #[pymethods]
 impl PyProgramList {
+    /// Build a `ProgramList` from a sequence of `Program` objects.
+    ///
+    /// Example:
+    ///     >>> p = package("p1", compile("fn:test:entry { capture(x=1); }"))
+    ///     >>> bundle = ProgramList([p])
+    ///     >>> data = bundle.to_bytes()
+    ///     >>> ProgramList.from_bytes(data).programs[0].id
+    ///     'p1'
+    #[new]
+    fn new(programs: Vec<PyProgram>) -> Self {
+        let retrieved_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        PyProgramList {
+            inner: ProgramList {
+                programs: programs.into_iter().map(|p| p.inner).collect(),
+                retrieved_at,
+            },
+        }
+    }
+
     #[getter]
     fn programs(&self) -> Vec<PyProgram> {
         self.inner
@@ -69,11 +91,22 @@ impl PyProgramList {
     fn from_bytes(data: &[u8]) -> PyResult<PyProgramList> {
         ProgramList::from_proto_bytes(data)
             .map(|program_list| PyProgramList { inner: program_list })
-            .map_err(|e| PyRuntimeError::new_err(format!("blah blah {}", e)))
+            .map_err(|e| PyRuntimeError::new_err(format!("Deserialization error: {}", e)))
+    }
+
+    /// Serialize this program list to protobuf bytes.
+    ///
+    /// Returns:
+    ///     bytes: Serialized program list (round-trippable via `from_bytes`).
+    fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        self.inner
+            .to_proto_bytes()
+            .map(|bytes| PyBytes::new(py, &bytes))
+            .map_err(|e| PyRuntimeError::new_err(format!("Serialization error: {}", e)))
     }
 
     fn __repr__(&self) -> String {
-        format!("<Programs programs={}>", self.inner.programs.len(),)
+        format!("<ProgramList programs={}>", self.inner.programs.len())
     }
 }
 
