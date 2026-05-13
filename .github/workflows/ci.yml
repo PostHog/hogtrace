@@ -23,13 +23,19 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Ensure cargo on PATH
-        # The dtolnay action only appends $CARGO_HOME/bin to PATH when it
-        # installs rustup itself. On runners with a pre-existing rustup in
-        # an unusual location, `cargo` can fall through to a stray
-        # `rustup-init` shim. Always prepend the cargo bin dir so the
-        # rustup-managed cargo wins.
-        run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Prepend rustup toolchain bin dir to PATH
+        # macos-latest arm64 runners ship `~/.cargo/bin/cargo` as a stale
+        # `rustup-init` shim, not the multi-call rustup binary. So even
+        # after rustup default stable, `cargo` / `rustc` on PATH fall
+        # through to the broken shim and tools like maturin die with
+        # "unexpected `rustc -vV` format". Ask rustup where the real
+        # cargo for the active toolchain lives, and prepend its parent
+        # directory (the toolchain's own bin/, with the actual binaries).
+        run: |
+          set -euo pipefail
+          TOOLCHAIN_BIN="$(dirname "$(rustup which cargo)")"
+          echo "Prepending $TOOLCHAIN_BIN to PATH"
+          echo "$TOOLCHAIN_BIN" >> "$GITHUB_PATH"
         shell: bash
 
       - name: Install protoc
@@ -72,14 +78,13 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Ensure cargo on PATH
-        # See the matching step in the rust-tests job for rationale —
-        # the dtolnay action skips its $CARGO_HOME/bin PATH update when
-        # rustup is pre-detected, which on macos-latest arm64 runners
-        # lets a stale `rustup-init` shim win over the rustup-managed
-        # cargo. The Install UV step appends the same path later, but
-        # by then maturin develop has already failed.
-        run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Prepend rustup toolchain bin dir to PATH
+        # See the matching step in the rust-tests job for rationale.
+        run: |
+          set -euo pipefail
+          TOOLCHAIN_BIN="$(dirname "$(rustup which cargo)")"
+          echo "Prepending $TOOLCHAIN_BIN to PATH"
+          echo "$TOOLCHAIN_BIN" >> "$GITHUB_PATH"
         shell: bash
 
       - name: Install protoc
@@ -136,8 +141,13 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Ensure cargo on PATH
-        run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Prepend rustup toolchain bin dir to PATH
+        # See the matching step in the rust-tests job for rationale.
+        run: |
+          set -euo pipefail
+          TOOLCHAIN_BIN="$(dirname "$(rustup which cargo)")"
+          echo "Prepending $TOOLCHAIN_BIN to PATH"
+          echo "$TOOLCHAIN_BIN" >> "$GITHUB_PATH"
         shell: bash
 
       - name: Install protoc
